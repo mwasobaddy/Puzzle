@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.puzzle-container {
+  position: relative;
+  height: 600px;
+  width: 100%;
+  background: rgb(245, 245, 245);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.puzzle-piece {
+  transition: all 0.2s ease;
+  will-change: transform;
+  backface-visibility: visible;
+  cursor: grab;
+}
+
+.puzzle-piece:active {
+  cursor: grabbing;
+}
+
+.puzzle-piece:hover {
+  transform: translateZ(20px);
+  box-shadow: 0 0 20px rgba(0,0,0,0.2);
+}
+
+* {
+  transition: transform 0.1s ease-out;
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+canvas {
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+  outline: none;
+}
+
+
+.puzzle-bg {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  animation: float 30s linear infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-50px) translateX(50px);
+  }
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+}

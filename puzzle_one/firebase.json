@@ -1,0 +1,43 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+
+  "hosting": {
+    "rewrites": [
+      {
+        "source": "/ext-firestore-stripe-payments-createCheckoutSession",
+        "function": "ext-firestore-stripe-payments-createCheckoutSession"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/ext-firestore-stripe-payments-createCheckoutSession",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Access-Control-Allow-Methods",
+            "value": "GET, POST, OPTIONS"
+          },
+          {
+            "key": "Access-Control-Allow-Headers",
+            "value": "Content-Type, Authorization"
+          }
+        ]
+      }
+    ]
+  }
+}
