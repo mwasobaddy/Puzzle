@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, RotateCcw, RefreshCw } from 'lucide-react';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const EnhancedPuzzle = ({ imageUrl, initialDifficulty = 3, onPiecePlace, onComplete }) => {
   const [pieces, setPieces] = useState([]);
@@ -17,7 +18,6 @@ const EnhancedPuzzle = ({ imageUrl, initialDifficulty = 3, onPiecePlace, onCompl
   const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
   const [correctPlacements, setCorrectPlacements] = useState(new Set());
   const [cellDimensions, setCellDimensions] = useState({ width: 0, height: 0 });
-  const db = getFirestore();
 
   useEffect(() => {
     const updateGridDimensions = () => {

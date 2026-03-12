@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export const usePuzzleHistory = (userId) => {
   const [recentPuzzles, setRecentPuzzles] = useState([]);
@@ -12,8 +13,6 @@ export const usePuzzleHistory = (userId) => {
       if (!userId) return;
 
       try {
-        const db = getFirestore();
-
         const completedRef = collection(db, 'completed_puzzles');
         const recentQuery = query(
           completedRef,

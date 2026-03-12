@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase';
+// Firebase Storage removed — images are compressed to data URLs client-side
+// to avoid CORS restrictions (no paid Storage plan required).
 
 const PuzzleImageUploader = ({ onImageProcessed = () => { } }) => {
   const [uploading, setUploading] = useState(false);
@@ -38,6 +38,9 @@ const PuzzleImageUploader = ({ onImageProcessed = () => { } }) => {
 
             resolve({
               data: ctx.getImageData(0, 0, width, height),
+              // Grab the compressed data URL right from the canvas —
+              // no Firebase Storage upload needed.
+              dataUrl: canvas.toDataURL('image/jpeg', 0.85),
               width,
               height,
               aspectRatio: width / height
@@ -77,9 +80,8 @@ const PuzzleImageUploader = ({ onImageProcessed = () => { } }) => {
 
       const imageData = await createImageData(file);
 
-      const storageRef = ref(storage, `puzzle-images/${Date.now()}-${file.name}`);
-      await uploadBytes(storageRef, file);
-      const imageUrl = await getDownloadURL(storageRef);
+      // Use the data URL from the canvas directly — no Storage upload.
+      const imageUrl = imageData.dataUrl;
 
       try {
         onImageProcessed({

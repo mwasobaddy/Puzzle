@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
-
-import { getFirestore, doc, onSnapshot } from "firebase/firestore";
-
-const db = getFirestore();
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../firebase";
 export const useUserSubscription = (userId) => {
     const [subscription, setSubscription] = useState({ planId: "free", status: "inactive" });
   

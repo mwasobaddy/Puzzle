@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { PayPalButtons } from '@paypal/react-paypal-js';
 import { FaCrown, FaCheck, FaGamepad, FaTrophy, FaStar } from 'react-icons/fa';
-import { doc, setDoc, getFirestore } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db } from '../firebase';
 import toast from 'react-hot-toast';
 import { GiPuzzle, GiLevelThree, GiLevelEndFlag } from 'react-icons/gi';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-
-const db = getFirestore();
+const stripePromise = import.meta.env.VITE_STRIPE_PUBLIC_KEY && import.meta.env.VITE_STRIPE_PUBLIC_KEY !== 'your-stripe-public-key' ? loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY) : null;
 
 const functions = getFunctions();
 

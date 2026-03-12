@@ -3,7 +3,6 @@ import Joyride, { STATUS } from 'react-joyride';
 import { auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import {
-  getFirestore,
   collection,
   query,
   where,
@@ -13,13 +12,13 @@ import {
   limit,
   getDoc
 } from 'firebase/firestore';
+import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import QuickAccess from './QuickAccess';
 import toast from 'react-hot-toast';
 import { FaPuzzlePiece, FaTrophy, FaClock, FaSignOutAlt, FaChartBar, FaImage, FaGlobe, FaUsers, FaCrown, FaCheck } from 'react-icons/fa';
 import UpgradeModalHome from './UpgradeModalHome';
 
-const db = getFirestore();
 
 const getCachedData = (key) => {
   const cachedData = localStorage.getItem(key);
@@ -248,7 +247,6 @@ const Home = ({ user }) => {
   useEffect(() => {
     if (!user?.uid) return;
 
-    const db = getFirestore();
     const incompletePuzzlesRef = collection(db, 'games');
     const incompletePuzzlesQuery = query(
       incompletePuzzlesRef,
@@ -269,7 +267,6 @@ const Home = ({ user }) => {
 
 
   const handleResumePuzzle = async (puzzleId) => {
-    const db = getFirestore();
     const gameRef = doc(db, 'games', puzzleId);
 
     try {

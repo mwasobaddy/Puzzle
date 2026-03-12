@@ -7,7 +7,6 @@ import { toast } from 'react-hot-toast';
 import ErrorBoundary from './ErrorBoundary';
 import { PUZZLE_TYPES } from '../constants/puzzleTypes';
 import { saveRedirectPath } from '../utils/authRedirect';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const CollaborativePuzzle = () => {
   const { gameId } = useParams();
@@ -147,36 +146,58 @@ const CollaborativePuzzle = () => {
     return () => puzzleTypeListener();
   }, [actualGameId]);
 
+  // Compress an image File to a data URL using a canvas.
+  // Avoids Firebase Storage entirely — no CORS config needed, no paid plan.
+  const compressImageToDataUrl = (file, maxWidth = 800, maxHeight = 600, quality = 0.75) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = objectUrl;
+    });
+
   const handleImageUpload = async (event) => {
     if (!isHost || !event.target.files[0]) return;
 
     const file = event.target.files[0];
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 10 * 1024 * 1024; // 10 MB raw file limit before compression
 
     if (file.size > maxSize) {
-      toast.error('Image size must be less than 5MB');
+      toast.error('Image size must be less than 10MB');
       return;
     }
 
     try {
-      const storage = getStorage();
-      const fileRef = storageRef(storage, `game_images/${actualGameId}/${file.name}`);
+      toast.loading('Processing image...', { id: 'img-upload' });
 
-      await uploadBytes(fileRef, file);
-
-      const imageUrl = await getDownloadURL(fileRef);
+      // Compress and convert to data URL — no Firebase Storage, no CORS
+      const dataUrl = await compressImageToDataUrl(file);
 
       await update(ref(database, `games/${actualGameId}`), {
-        image: imageUrl,
+        image: dataUrl,
         uploadedAt: Date.now()
       });
 
-      setImage(imageUrl);
-      toast.success('Image uploaded successfully');
+      setImage(dataUrl);
+      toast.success('Image uploaded successfully', { id: 'img-upload' });
 
     } catch (error) {
       console.error('Image upload error:', error);
-      toast.error('Failed to upload image: ' + error.message);
+      toast.error('Failed to upload image: ' + error.message, { id: 'img-upload' });
     }
   };
 

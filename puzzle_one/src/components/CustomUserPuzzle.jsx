@@ -6,9 +6,9 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { Camera, Check, Info, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play, Pause, Share2, Download, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { auth } from '../firebase';
-import { getFirestore, collection, addDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
-import { ref, update, getDatabase } from 'firebase/database';
+import { auth, db, database } from '../firebase';
+import { collection, addDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import { ref, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
 import DifficultyBar, { difficulties } from './DifficultyBar';
@@ -418,15 +418,59 @@ const PuzzleGame = () => {
   const guideOutlinesRef = useRef([]);
   const puzzleContainerRef = useRef(null);
   const soundRef = useRef(null);
+  const imageAspectRatioRef = useRef(1);
+  const completionHandledRef = useRef(false);
+  // Ref mirrors timeElapsed so finalizeCompletion always reads the live value
+  // even when called from a stale closure inside a useEffect event handler.
+  const timeElapsedRef = useRef(0);
 
   const defaultCameraPosition = { x: 0, y: 0, z: 3 };
   const defaultControlsTarget = new THREE.Vector3(0, 0, 0);
+
+  const calculatePieceSize = (layoutOverride) => {
+    const gridSize = selectedDifficulty.grid;
+    const baseSize = layoutOverride?.pieces?.baseSize ?? 3.5;
+    const aspectRatio = imageAspectRatioRef.current || 1;
+
+    return {
+      x: (baseSize * aspectRatio) / gridSize.x,
+      y: baseSize / gridSize.y
+    };
+  };
+
+  const handlePieceSnap = (piece, particleSystem) => {
+    const originalPos = piece.userData.originalPosition;
+    const duration = 0.2;
+    const startPos = piece.position.clone();
+    const startRot = piece.rotation.clone();
+    const startTime = Date.now();
+
+    const animateSnap = () => {
+      const progress = Math.min((Date.now() - startTime) / (duration * 1000), 1);
+      const easeProgress = 1 - Math.pow(1 - progress, 4);
+
+      piece.position.lerpVectors(startPos, originalPos, easeProgress);
+      piece.rotation.z = THREE.MathUtils.lerp(startRot.z, 0, easeProgress);
+
+      if (progress < 1) {
+        requestAnimationFrame(animateSnap);
+      } else {
+        piece.position.copy(originalPos);
+        piece.rotation.set(0, 0, 0);
+        if (particleSystem) {
+          particleSystem.emit(piece.position, 30);
+        }
+        soundRef.current?.play('place');
+      }
+    };
+
+    animateSnap();
+  };
 
   useEffect(() => {
     const checkPuzzleCreationLimit = async () => {
       if (isPremium || !isPremium) return;
 
-      const db = getFirestore();
       const puzzlesRef = collection(db, 'completed_puzzles');
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -462,6 +506,7 @@ const PuzzleGame = () => {
     setGameState('playing');
     setIsTimerRunning(true);
     setStartTime(Date.now());
+    completionHandledRef.current = false;
   };
 
   const updateGameState = async (newState) => {
@@ -526,6 +571,7 @@ const PuzzleGame = () => {
     setCompletedPieces(0);
     setProgress(0);
     setIsTimerRunning(true);
+    completionHandledRef.current = false;
 
     const leftPieces = [];
     const rightPieces = [];
@@ -543,8 +589,9 @@ const PuzzleGame = () => {
       }
     });
 
-    arrangePiecesInContainer(leftPieces, CONTAINER_LAYOUT.left, pieceSize);
-    arrangePiecesInContainer(rightPieces, CONTAINER_LAYOUT.right, pieceSize);
+    const size = calculatePieceSize(layout);
+    arrangePiecesInContainer(leftPieces, CONTAINER_LAYOUT.left, size);
+    arrangePiecesInContainer(rightPieces, CONTAINER_LAYOUT.right, size);
 
     handleResetView();
   };
@@ -559,6 +606,7 @@ const PuzzleGame = () => {
     setTimeElapsed(0);
     setGameState('playing');
     setIsTimerRunning(true);
+    completionHandledRef.current = false;
 
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -653,12 +701,10 @@ const PuzzleGame = () => {
 
         const texture = await new THREE.TextureLoader().loadAsync(imageUrl);
         const aspectRatio = texture.image.width / texture.image.height;
-        const baseSize = 3.5;
+        imageAspectRatioRef.current = aspectRatio;
+
         const gridSize = selectedDifficulty.grid;
-        const pieceSize = {
-          x: (baseSize * aspectRatio) / gridSize.x,
-          y: baseSize / gridSize.y
-        };
+        const pieceSize = calculatePieceSize(layout);
 
         setTotalPieces(gridSize.x * gridSize.y);
         createPlacementGuides(gridSize, pieceSize);
@@ -804,7 +850,11 @@ const PuzzleGame = () => {
   useEffect(() => {
     if (isTimerRunning) {
       timerRef.current = setInterval(() => {
-        setTimeElapsed(prev => prev + 1);
+        setTimeElapsed(prev => {
+          const next = prev + 1;
+          timeElapsedRef.current = next; // keep ref in sync
+          return next;
+        });
       }, 1000);
     }
 
@@ -814,16 +864,6 @@ const PuzzleGame = () => {
       }
     };
   }, [isTimerRunning]);
-
-  useEffect(() => {
-    if (progress === 100) {
-      setIsTimerRunning(false);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      synchronousCompletion();
-    }
-  }, [progress]);
 
   useEffect(() => {
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return;
@@ -889,7 +929,11 @@ const PuzzleGame = () => {
         selectedPieceRef.current.userData.isPlaced = true;
         setCompletedPieces(prev => {
           const newCount = prev + 1;
-          setProgress((newCount / totalPieces) * 100);
+          const newProgress = (newCount / totalPieces) * 100;
+          setProgress(newProgress);
+          if (newCount >= totalPieces && !completionHandledRef.current) {
+            finalizeCompletion();
+          }
           return newCount;
         });
         handlePieceComplete(selectedPieceRef.current);
@@ -936,7 +980,11 @@ const PuzzleGame = () => {
           selectedPieceRef.current.userData.isPlaced = true;
           setCompletedPieces(prev => {
             const newCount = prev + 1;
-            setProgress((newCount / totalPieces) * 100);
+            const newProgress = (newCount / totalPieces) * 100;
+            setProgress(newProgress);
+            if (newCount >= totalPieces && !completionHandledRef.current) {
+              finalizeCompletion();
+            }
             return newCount;
           });
           handlePieceComplete(selectedPieceRef.current);
@@ -974,7 +1022,6 @@ const PuzzleGame = () => {
 
   const handleImageUpload = async (event) => {
     if (!isPremium) {
-      const db = getFirestore();
       const puzzlesRef = collection(db, 'completed_puzzles');
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1010,6 +1057,7 @@ const PuzzleGame = () => {
         setCompletedPieces(0);
         setProgress(0);
         setTimeElapsed(0);
+        completionHandledRef.current = false;
         if (timerRef.current) {
           clearInterval(timerRef.current);
         }
@@ -1139,48 +1187,63 @@ const PuzzleGame = () => {
     }
   };
 
-  useEffect(() => {
-    if (progress === 100 && auth?.currentUser) {
-      const completionData = {
-        puzzleId: `custom_${Date.now()}`,
-        userId: auth.currentUser.uid,
-        playerName: auth.currentUser.email || 'Anonymous',
-        startTime: startTime,
-        difficulty: selectedDifficulty.id,
-        imageUrl: image,
-        timer: timeElapsed,
-        isPremium: isPremium,
-        completedAt: serverTimestamp()
-      };
+  const finalizeCompletion = async () => {
+    if (completionHandledRef.current || !auth?.currentUser) return;
+    completionHandledRef.current = true;
 
-      handlePuzzleCompletion(completionData).then(() => {
-        const achievements = checkAchievements();
-        setCompletedAchievements(achievements);
-
-        if (gameId) {
-          updateGameState({
-            state: 'completed',
-            completionTime: timeElapsed,
-            achievements: achievements.map(a => a.id)
-          });
-        }
-
-        setShowShareModal(true);
-
-        soundRef.current?.play('complete');
-
-        if (!isPremium) {
-          checkPuzzleLimits();
-        }
-      }).catch(error => {
-        console.error('Error handling puzzle completion:', error);
-        toast.error('Failed to save puzzle completion');
-      });
+    setIsTimerRunning(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
     }
-  }, [progress, auth.currentUser, startTime, selectedDifficulty, image, timeElapsed, isPremium, gameId]);
+
+    const completionData = {
+      puzzleId: `custom_${Date.now()}`,
+      userId: auth.currentUser.uid,
+      playerName: auth.currentUser.email || 'Anonymous',
+      startTime: startTime,
+      difficulty: selectedDifficulty.grid.x,
+      name: `${selectedDifficulty.label} Custom Puzzle`,
+      pieceCount: selectedDifficulty.grid.x * selectedDifficulty.grid.y,
+      imageUrl: image,
+      // Use ref so we always get the live elapsed time, not a stale closure value
+      timer: timeElapsedRef.current,
+      isPremium: isPremium,
+      completedAt: serverTimestamp()
+    };
+
+    try {
+      // Show completion UI immediately — don't block on Firestore writes
+      const achievements = checkAchievements();
+      setCompletedAchievements(achievements);
+
+      if (gameId) {
+        updateGameState({
+          state: 'completed',
+          completionTime: timeElapsed,
+          achievements: achievements.map(a => a.id)
+        });
+      }
+
+      setShowShareModal(true);
+      toast.success('Puzzle completed!');
+      soundRef.current?.play('complete');
+
+      // Fire writes in background — SDK queues and retries until connected
+      handlePuzzleCompletion(completionData).catch(err => {
+        console.error('[Custom] Background completion write failed:', err);
+      });
+
+      if (!isPremium) {
+        checkPuzzleLimits();
+      }
+    } catch (error) {
+      console.error('Error handling puzzle completion:', error);
+      toast.error('Failed to save puzzle completion');
+      completionHandledRef.current = false; // allow retry if needed
+    }
+  };
 
   const checkPuzzleLimits = async () => {
-    const db = getFirestore();
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -1261,7 +1324,6 @@ const PuzzleGame = () => {
     if (!auth.currentUser) return;
 
     const achievements = checkAchievements();
-    const db = getFirestore();
 
     try {
       await addDoc(collection(db, 'completed_puzzles'), {
@@ -1285,8 +1347,7 @@ const PuzzleGame = () => {
   const initializeGameState = async () => {
     if (!auth.currentUser) return;
 
-    const db = getDatabase();
-    const gameRef = ref(db, `games/${gameId}`);
+    const gameRef = ref(database, `games/${gameId}`);
 
     try {
       await update(gameRef, {

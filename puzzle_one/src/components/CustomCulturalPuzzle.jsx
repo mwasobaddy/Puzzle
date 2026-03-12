@@ -6,9 +6,9 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { Camera, Check, Info, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play, Pause, Share2, Download, X, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { auth } from '../firebase';
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { ref, update, getDatabase } from 'firebase/database';
+import { auth, db, database } from '../firebase';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { ref, update } from 'firebase/database';
 import elephant from '../assets/elephant.png';
 import pyramid from '../assets/pyramid.png';
 import african from '../assets/african.png';
@@ -357,6 +357,8 @@ const PuzzleGame = () => {
   const guideOutlinesRef = useRef([]);
   const puzzleContainerRef = useRef(null);
   const soundRef = useRef(null);
+  // Ref mirrors timeElapsed so synchronousCompletion always reads the live value
+  const timeElapsedRef = useRef(0);
 
   const defaultCameraPosition = { x: 0, y: 0, z: 5 };
   const defaultControlsTarget = new THREE.Vector3(0, 0, 0);
@@ -708,7 +710,11 @@ const PuzzleGame = () => {
   useEffect(() => {
     if (isTimerRunning) {
       timerRef.current = setInterval(() => {
-        setTimeElapsed(prev => prev + 1);
+        setTimeElapsed(prev => {
+          const next = prev + 1;
+          timeElapsedRef.current = next;
+          return next;
+        });
       }, 1000);
     }
 
@@ -983,27 +989,13 @@ const PuzzleGame = () => {
   );
   useEffect(() => {
     if (progress === 100 && auth?.currentUser) {
-
-      const completionData = {
-        puzzleId: `custom_${Date.now()}`,
-        userId: auth.currentUser.uid,
-        playerName: auth.currentUser.email || 'Anonymous',
-        startTime: startTime,
-        difficulty,
-        imageUrl: image,
-        timer: timeElapsed,
-      };
-
-      console.log('Data sent to handlePuzzleCompletion:', completionData);
-      handlePuzzleCompletion(completionData);
-
       const achievements = checkAchievements();
       console.log('Achievements Earned:', achievements);
 
       if (gameId) {
         const gameUpdateData = {
           state: 'completed',
-          completionTime: timeElapsed,
+          completionTime: timeElapsedRef.current,
           achievements: achievements.map(a => a.id)
         };
         console.log('Game State Update:', gameUpdateData);
@@ -1013,35 +1005,31 @@ const PuzzleGame = () => {
   }, [progress, startTime, difficulty, image, timeElapsed, totalPieces, completedPieces]);
 
   const synchronousCompletion = async () => {
-    try {
-      console.log('Starting synchronous completion process...');
+    console.log('Starting synchronous completion process...');
 
-      await handlePuzzleCompletionCultural({
-        puzzleId: `custom_${Date.now()}`,
-        userId: auth?.currentUser?.uid,
-        playerName: auth?.currentUser?.displayName || 'Anonymous',
-        startTime,
-        difficulty,
-        imageUrl: image,
-        timer: timeElapsed
-      });
+    // Show completion UI immediately — don't block on Firestore writes
+    const achievements = checkAchievements();
+    setCompletedAchievements(achievements);
+    setShowShareModal(true);
+    soundRef.current?.play('complete');
 
-      const achievements = checkAchievements();
-      console.log('Processing achievements:', achievements);
+    const completionData = {
+      puzzleId: `cultural_${Date.now()}`,
+      userId: auth?.currentUser?.uid,
+      playerName: auth?.currentUser?.displayName || auth?.currentUser?.email || 'Anonymous',
+      startTime,
+      difficulty: selectedDifficulty.grid.x,
+      name: `${selectedDifficulty.label} Cultural Puzzle`,
+      pieceCount: selectedDifficulty.grid.x * selectedDifficulty.grid.y,
+      imageUrl: image,
+      timer: timeElapsedRef.current,
+    };
+    console.log('Data sent to handlePuzzleCompletion:', completionData);
 
-      if (gameId) {
-        await updateGameState({
-          state: 'completed',
-          completionTime: timeElapsed,
-          achievements: achievements.map(a => a.id)
-        });
-      }
-
-      console.log('Completion process finished successfully');
-      setShowShareModal(true);
-    } catch (error) {
-      console.error('Error in completion process:', error);
-    }
+    // Fire writes in background — SDK queues and retries until connected
+    handlePuzzleCompletion(completionData).catch(err => {
+      console.error('[Cultural] Background completion write failed:', err);
+    });
   };
 
   useEffect(() => {
@@ -1100,8 +1088,6 @@ const PuzzleGame = () => {
     if (!auth.currentUser) return;
 
     const achievements = checkAchievements();
-    const db = getFirestore();
-
     try {
       await addDoc(collection(db, 'completed_puzzles'), {
         userId: auth.currentUser.uid,
@@ -1144,8 +1130,7 @@ const PuzzleGame = () => {
   const initializeGameState = async () => {
     if (!auth.currentUser) return;
 
-    const db = getDatabase();
-    const gameRef = ref(db, `games/${gameId}`);
+    const gameRef = ref(database, `games/${gameId}`);
 
     try {
       await update(gameRef, {

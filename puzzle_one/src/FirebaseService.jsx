@@ -1,5 +1,5 @@
 // FirebaseService.js
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import {
   getFirestore,
   collection,
@@ -12,7 +12,6 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 class FirebaseService {
   static async createPiece(roomId, pieceData) {
@@ -120,16 +119,30 @@ class FirebaseService {
     }
   }
 
-  static async uploadImage(file, roomId) {
-    try {
-      const imageRef = ref(storage, `puzzles/${roomId}/${file.name}`);
-      await uploadBytes(imageRef, file);
-      const url = await getDownloadURL(imageRef);
-      return url;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
-    }
+  static async uploadImage(file) {
+    // Compress to a JPEG data URL client-side — no Firebase Storage,
+    // no CORS config required, works on the free Spark plan.
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX = 1024;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Failed to load image')); };
+      img.src = objectUrl;
+    });
   }
 
   static async updateGameState(roomId, gameState) {

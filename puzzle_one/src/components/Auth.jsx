@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithPopup,
+  linkWithCredential,
 } from 'firebase/auth';
 import { getAndClearRedirectPath, redirectToSavedPath } from '../utils/authRedirect';
 
@@ -35,6 +36,8 @@ const getReadableErrorMessage = (error) => {
       return 'Incorrect password. Please try again.';
     case 'auth/too-many-requests':
       return 'Too many failed attempts. Please try again later.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account with this email already exists with a different sign-in method.';
     case 'auth/network-request-failed':
       return 'Network error. Please check your internet connection.';
     default:
@@ -49,6 +52,8 @@ const Auth = ({ onAuthSuccess }) => {
   const [message, setMessage] = useState('');
   const [resetPassword, setResetPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [pendingCredential, setPendingCredential] = useState(null);
 
   useEffect(() => {
     const user = localStorage.getItem('authUser');
@@ -69,15 +74,30 @@ const Auth = ({ onAuthSuccess }) => {
     setIsLoading(true);
     try {
       let userCredential;
-      if (isLogin) {
+      if (linkingGoogle) {
+        // Only sign in for linking
         userCredential = await signInWithEmailAndPassword(auth, email, password);
+        // Link the Google credential
+        await linkWithCredential(userCredential.user, pendingCredential);
+        setMessage('Accounts linked successfully! You can now sign in with Google.');
+        setLinkingGoogle(false);
+        setPendingCredential(null);
       } else {
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        if (isLogin) {
+          userCredential = await signInWithEmailAndPassword(auth, email, password);
+        } else {
+          userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        }
+        setMessage(isLogin ? 'Login successful!' : 'Sign up successful!');
       }
       handleSuccessfulLogin(userCredential.user);
-      setMessage(isLogin ? 'Login successful!' : 'Sign up successful!');
     } catch (error) {
+      console.log('Firebase Auth Error:', error); // Add this line for debugging
       setMessage(getReadableErrorMessage(error));
+      if (linkingGoogle) {
+        setLinkingGoogle(false);
+        setPendingCredential(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +110,13 @@ const Auth = ({ onAuthSuccess }) => {
       handleSuccessfulLogin(result.user);
       setMessage('Google login successful!');
     } catch (error) {
-      setMessage(getReadableErrorMessage(error));
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        setPendingCredential(error.credential);
+        setLinkingGoogle(true);
+        setMessage('An account with this email already exists. Please sign in with email and password below to link your Google account.');
+      } else {
+        setMessage(getReadableErrorMessage(error));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +149,7 @@ const Auth = ({ onAuthSuccess }) => {
         <div className="backdrop-blur-xl bg-white bg-opacity-90 p-6 md:p-8 rounded-2xl shadow-2xl relative z-10">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-6 animate-fade-in">
             <span className="bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
-              {isLogin ? 'Welcome Back Puzzler!' : 'Join the Puzzle Adventure'}
+              {linkingGoogle ? 'Link Your Google Account' : isLogin ? 'Welcome Back Puzzler!' : 'Join the Puzzle Adventure'}
             </span>
           </h2>
 
@@ -191,32 +217,36 @@ const Auth = ({ onAuthSuccess }) => {
                           hover:opacity-90 transform hover:-translate-y-0.5 transition-all duration-300
                           disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
-                {isLoading ? 'Loading...' : (isLogin ? 'Start Your Puzzle Journey' : 'Create Your Account')}
+                {isLoading ? 'Loading...' : linkingGoogle ? 'Link Accounts' : (isLogin ? 'Start Your Puzzle Journey' : 'Create Your Account')}
               </button>
 
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
-                </div>
-              </div>
+              {!linkingGoogle && (
+                <>
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-2 bg-white text-gray-500">Or continue with</span>
+                    </div>
+                  </div>
 
-              <button
-                onClick={handleGoogleLogin}
-                disabled={isLoading}
-                className="w-full py-3 px-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-lg 
-                          hover:opacity-90 transform hover:-translate-y-0.5 transition-all duration-300
-                          disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                {isLoading ? 'Connecting...' : 'Continue with Google'}
-              </button>
+                  <button
+                    onClick={handleGoogleLogin}
+                    disabled={isLoading}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-lg 
+                              hover:opacity-90 transform hover:-translate-y-0.5 transition-all duration-300
+                              disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  >
+                    {isLoading ? 'Connecting...' : 'Continue with Google'}
+                  </button>
+                </>
+              )}
             </form>
           )}
 
           <div className="mt-6 space-y-2 text-center">
-            {isLogin && !resetPassword && (
+            {isLogin && !resetPassword && !linkingGoogle && (
               <button
                 onClick={() => setResetPassword(true)}
                 className="text-purple-600 hover:text-purple-800 font-medium transition-colors duration-300"
@@ -224,12 +254,14 @@ const Auth = ({ onAuthSuccess }) => {
                 Forgot your password?
               </button>
             )}
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="block w-full text-gray-600 hover:text-gray-800 font-medium transition-colors duration-300"
-            >
-              {isLogin ? 'New Puzzler? Sign Up' : 'Already solving puzzles? Login'}
-            </button>
+            {!linkingGoogle && (
+              <button
+                onClick={() => setIsLogin(!isLogin)}
+                className="block w-full text-gray-600 hover:text-gray-800 font-medium transition-colors duration-300"
+              >
+                {isLogin ? 'New Puzzler? Sign Up' : 'Already solving puzzles? Login'}
+              </button>
+            )}
           </div>
 
           {message && (

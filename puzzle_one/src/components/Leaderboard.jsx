@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef, useTransition } from 'react';
 import {
-  getFirestore,
   collection,
   query,
   where,
@@ -8,10 +7,12 @@ import {
   getDocs,
   doc,
   getDoc,
+  onSnapshot,
   startAfter,
   limit
 } from 'firebase/firestore';
-import { getDatabase, ref, get } from 'firebase/database';
+import { ref, get } from 'firebase/database';
+import { db, database } from '../firebase';
 import { ChevronUp, ChevronDown, Filter, Search, Info, Loader } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 20;
@@ -138,7 +139,7 @@ const UserStats = ({ userId }) => {
     totalCompleted: 0,
     bestTime: null,
     averageTime: null,
-    completionRate: null,
+    completionRate: '0',
     difficultyBreakdown: {},
   });
   const [selectedDifficulty, setSelectedDifficulty] = useState('all');
@@ -150,122 +151,158 @@ const UserStats = ({ userId }) => {
   const observerRef = useRef(null);
   const lastElementRef = useRef(null);
 
-  const fetchUserData = useCallback(async (lastVisible = null) => {
+  // ── user_stats listener (self-heals when connection comes online) ────────────
+  useEffect(() => {
     if (!userId) return;
+    const statsRef = doc(db, 'user_stats', userId);
+    const unsubStats = onSnapshot(
+      statsRef,
+      (snap) => {
+        if (snap.exists()) {
+          setSummaryStats(prev => ({
+            ...prev,
+            totalCompleted: snap.data().completed || 0,
+            bestTime: snap.data().bestTime ?? prev.bestTime,
+          }));
+        }
+      },
+      () => {} // silence offline errors – data already set from completed_puzzles snapshot
+    );
+    return () => unsubStats();
+  }, [userId]);
 
-    const cacheKey = `${userId}-${lastVisible?.id || 'initial'}-${selectedDifficulty}-${searchQuery}`;
-    if (cache.has(cacheKey) && !lastVisible) {
-      const cachedData = cache.get(cacheKey);
-      setData(cachedData.data);
-      setSummaryStats(cachedData.summaryStats);
-      return;
-    }
+  // ── Initial load via onSnapshot (auto-reconnects; never throws "offline") ──────
+  useEffect(() => {
+    if (!userId) return;
+    cache.clear();
+    setData(prev => ({ ...prev, loading: true, completedPuzzles: [], lastDoc: null, hasMore: true }));
 
+    const puzzlesQuery = query(
+      collection(db, 'completed_puzzles'),
+      where('userId', '==', userId),
+      orderBy('timestamp', 'desc'),
+      limit(ITEMS_PER_PAGE)
+    );
+
+    const unsubscribe = onSnapshot(
+      puzzlesQuery,
+      async (completedSnap) => {
+        try {
+          const completedResults = completedSnap.docs.map(docSnap => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              name: d.name || `${d.difficulty}x${d.difficulty} Puzzle`,
+              bestTime: d.completionTime,
+              difficulty: d.difficulty,
+              thumbnail: d.thumbnail || `/api/placeholder/100/100`,
+              timestamp: d.timestamp?.toDate()?.toISOString()
+            };
+          });
+
+          // Fetch secondary data with individual fallbacks so an offline error
+          // on either call doesn't abort rendering the puzzle list.
+          const [gamesSnap, userStatsSnap] = await Promise.all([
+            get(ref(database, 'games')).catch(() => null),
+            getDoc(doc(db, 'user_stats', userId)).catch(() => null)
+          ]);
+
+          let currentResults = [];
+          if (gamesSnap?.exists()) {
+            currentResults = Object.entries(gamesSnap.val())
+              .filter(([, game]) => game.userId === userId && !game.isCompleted)
+              .map(([key, game]) => ({
+                id: key,
+                name: `${game.difficulty}x${game.difficulty} Puzzle`,
+                currentTime: game.currentTime || 0,
+                difficulty: game.difficulty,
+                thumbnail: game.thumbnail || `/api/placeholder/100/100`,
+                startedAt: new Date(game.startTime).toISOString()
+              }));
+          }
+
+          const difficultyBreakdown = completedResults.reduce((acc, puzzle) => {
+            acc[puzzle.difficulty] = (acc[puzzle.difficulty] || 0) + 1;
+            return acc;
+          }, {});
+          const totalTime = completedResults.reduce((sum, puzzle) => sum + (puzzle.bestTime || 0), 0);
+          const averageTime = completedResults.length ? Math.round(totalTime / completedResults.length) : null;
+          const completionRate = currentResults.length + completedResults.length > 0
+            ? (completedResults.length / (currentResults.length + completedResults.length) * 100).toFixed(1)
+            : 0;
+
+          setSummaryStats({
+            totalCompleted: userStatsSnap?.exists?.() ? userStatsSnap.data().completed || 0 : 0,
+            bestTime: userStatsSnap?.exists?.() ? userStatsSnap.data().bestTime : null,
+            averageTime,
+            completionRate,
+            difficultyBreakdown,
+          });
+
+          setData({
+            completedPuzzles: completedResults,
+            currentPuzzles: currentResults,
+            loading: false,
+            error: null,
+            lastDoc: completedSnap.docs[completedSnap.docs.length - 1],
+            hasMore: completedResults.length === ITEMS_PER_PAGE
+          });
+        } catch (err) {
+          console.error('Error processing snapshot data:', err);
+          setData(prev => ({ ...prev, loading: false, error: 'Failed to load user statistics' }));
+        }
+      },
+      (err) => {
+        console.error('Snapshot listener error:', err);
+        setData(prev => ({ ...prev, loading: false, error: 'Failed to load user statistics' }));
+      }
+    );
+
+    return () => unsubscribe();
+  }, [userId, selectedDifficulty, searchQuery]);
+
+  // ── Pagination: load more pages (SDK is online by the time user scrolls) ──────
+  const loadMore = useCallback(async () => {
+    if (!data.lastDoc || !data.hasMore || data.loading || !userId) return;
+    setData(prev => ({ ...prev, loading: true }));
     try {
-      setData(prev => ({ ...prev, loading: !lastVisible }));
-      const db = getFirestore();
-      const rtdb = getDatabase();
-
-      let puzzlesQuery = query(
+      const moreQuery = query(
         collection(db, 'completed_puzzles'),
         where('userId', '==', userId),
         orderBy('timestamp', 'desc'),
-        limit(ITEMS_PER_PAGE)
+        limit(ITEMS_PER_PAGE),
+        startAfter(data.lastDoc)
       );
-
-      if (lastVisible) {
-        puzzlesQuery = query(puzzlesQuery, startAfter(lastVisible));
-      }
-
-      const [completedSnap, gamesSnap, userStatsSnap] = await Promise.all([
-        getDocs(puzzlesQuery),
-        !lastVisible ? get(ref(rtdb, 'games')) : Promise.resolve(null),
-        !lastVisible ? getDoc(doc(collection(db, 'user_stats'), userId)) : Promise.resolve(null)
-      ]);
-
-      const completedResults = completedSnap.docs.map(doc => {
-        const data = doc.data();
+      const snap = await getDocs(moreQuery);
+      const moreResults = snap.docs.map(docSnap => {
+        const d = docSnap.data();
         return {
-          id: doc.id,
-          name: data.name || `${data.difficulty}x${data.difficulty} Puzzle`,
-          bestTime: data.completionTime,
-          difficulty: data.difficulty,
-          thumbnail: data.thumbnail || `/api/placeholder/100/100`,
-          timestamp: data.timestamp?.toDate()?.toISOString()
+          id: docSnap.id,
+          name: d.name || `${d.difficulty}x${d.difficulty} Puzzle`,
+          bestTime: d.completionTime,
+          difficulty: d.difficulty,
+          thumbnail: d.thumbnail || `/api/placeholder/100/100`,
+          timestamp: d.timestamp?.toDate()?.toISOString()
         };
       });
-
-      let currentResults = data.currentPuzzles;
-      if (!lastVisible && gamesSnap?.exists()) {
-        currentResults = Object.entries(gamesSnap.val())
-          .filter(([_, game]) => game.userId === userId && !game.isCompleted)
-          .map(([key, game]) => ({
-            id: key,
-            name: `${game.difficulty}x${game.difficulty} Puzzle`,
-            currentTime: game.currentTime || 0,
-            difficulty: game.difficulty,
-            thumbnail: game.thumbnail || `/api/placeholder/100/100`,
-            startedAt: new Date(game.startTime).toISOString()
-          }));
-      }
-
-      let newSummaryStats = summaryStats;
-      if (!lastVisible) {
-        const difficultyBreakdown = completedResults.reduce((acc, puzzle) => {
-          acc[puzzle.difficulty] = (acc[puzzle.difficulty] || 0) + 1;
-          return acc;
-        }, {});
-
-        const totalTime = completedResults.reduce((sum, puzzle) => sum + (puzzle.bestTime || 0), 0);
-        const averageTime = completedResults.length ? Math.round(totalTime / completedResults.length) : null;
-        const completionRate = currentResults.length + completedResults.length > 0
-          ? (completedResults.length / (currentResults.length + completedResults.length) * 100).toFixed(1)
-          : 0;
-
-        newSummaryStats = {
-          totalCompleted: userStatsSnap?.exists() ? userStatsSnap.data().completed || 0 : 0,
-          bestTime: userStatsSnap?.exists() ? userStatsSnap.data().bestTime : null,
-          averageTime,
-          completionRate,
-          difficultyBreakdown,
-        };
-        setSummaryStats(newSummaryStats);
-      }
-
-      const newData = {
-        completedPuzzles: lastVisible ?
-          [...data.completedPuzzles, ...completedResults] :
-          completedResults,
-        currentPuzzles: currentResults,
-        loading: false,
-        error: null,
-        lastDoc: completedSnap.docs[completedSnap.docs.length - 1],
-        hasMore: completedResults.length === ITEMS_PER_PAGE
-      };
-
-      setData(newData);
-
-      if (!lastVisible) {
-        cache.set(cacheKey, {
-          data: newData,
-          summaryStats: newSummaryStats
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching user data:', err);
       setData(prev => ({
         ...prev,
+        completedPuzzles: [...prev.completedPuzzles, ...moreResults],
         loading: false,
-        error: 'Failed to load user statistics'
+        lastDoc: snap.docs[snap.docs.length - 1],
+        hasMore: moreResults.length === ITEMS_PER_PAGE
       }));
+    } catch (err) {
+      console.error('Error loading more puzzles:', err);
+      setData(prev => ({ ...prev, loading: false }));
     }
-  }, [userId, selectedDifficulty, searchQuery]);
+  }, [userId, data.lastDoc, data.hasMore, data.loading]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && data.hasMore && !data.loading) {
-          fetchUserData(data.lastDoc);
+          loadMore();
         }
       },
       { threshold: 0.5 }
@@ -282,12 +319,7 @@ const UserStats = ({ userId }) => {
         observerRef.current.disconnect();
       }
     };
-  }, [data.hasMore, data.loading, data.lastDoc, fetchUserData]);
-
-  useEffect(() => {
-    cache.clear();
-    fetchUserData(null);
-  }, [fetchUserData]);
+  }, [data.hasMore, data.loading, data.lastDoc, loadMore]);
 
   const formatTime = useCallback((seconds) => {
     if (seconds == null) return '--:--';

@@ -1,29 +1,33 @@
-import { getFirestore, collection, addDoc, updateDoc, doc, increment, getDoc, setDoc } from 'firebase/firestore';
-import { getDatabase, ref, get, update } from 'firebase/database';
+import { collection, addDoc, updateDoc, doc, increment, getDoc, setDoc } from 'firebase/firestore';
+import { ref, update } from 'firebase/database';
+import { db, database } from '../firebase';
 
 export const handlePuzzleCompletion = async ({
   puzzleId,
   userId,
   playerName,
-  startTime,
   difficulty,
+  pieceCount,
   imageUrl,
-  timer
+  timer,
+  name
 }) => {
-  console.log('Starting puzzle completion handler with data:', {
-    puzzleId,
-    userId,
-    playerName,
-    startTime,
-    difficulty,
-    timer
-  });
+  console.log('[PCH] handler called', { puzzleId, userId, timer, difficulty });
 
-  const db = getFirestore();
-  const rtdb = getDatabase();
+  if (!userId) {
+    console.error('[PCH] userId is missing — aborting completion write');
+    return { success: false, reason: 'no userId' };
+  }
 
   try {
-    const completionTime = timer;
+    const completionTime = Number.isFinite(timer) ? timer : 0;
+    const pieces = Number.isFinite(pieceCount) ? pieceCount : null;
+    const difficultyValue = typeof difficulty === 'number'
+      ? difficulty
+      : (pieces ? Math.sqrt(pieces) : null);
+
+    const safeTimePerPiece = pieces && pieces > 0 ? completionTime / pieces : completionTime;
+    const safeDifficultyMultiplier = difficultyValue ? Math.pow(difficultyValue, 1.5) : 1;
     const timestamp = new Date();
 
     const scoreData = {
@@ -35,12 +39,15 @@ export const handlePuzzleCompletion = async ({
       timestamp,
       imageUrl,
       gameMode: puzzleId.startsWith('multiplayer_') ? 'multiplayer' : 'single',
-      timePerPiece: completionTime / (difficulty * difficulty),
-      difficultyMultiplier: Math.pow(difficulty, 1.5)
+      timePerPiece: safeTimePerPiece,
+      difficultyMultiplier: safeDifficultyMultiplier,
+      ...(pieces != null && { pieceCount: pieces }),
+      ...(difficultyValue != null && { difficultyValue }),
     };
-    // console.log('Preparing to save score data:', scoreData);
+
+    console.log('[PCH] writing puzzle_scores...');
     const scoreDoc = await addDoc(collection(db, 'puzzle_scores'), scoreData);
-    // console.log('Score saved with ID:', scoreDoc.id);
+    console.log('[PCH] puzzle_scores written', scoreDoc.id);
 
     const puzzleData = {
       puzzleId,
@@ -49,11 +56,13 @@ export const handlePuzzleCompletion = async ({
       difficulty,
       timestamp: new Date(),
       thumbnail: imageUrl,
-      name: `${difficulty}x${difficulty} Puzzle`
+      name: name || `${difficulty}x${difficulty} Puzzle`,
+      ...(pieces != null && { pieceCount: pieces }),
     };
-    // console.log('Preparing to save puzzle data:', puzzleData);
+
+    console.log('[PCH] writing completed_puzzles...');
     const puzzleDoc = await addDoc(collection(db, 'completed_puzzles'), puzzleData);
-    // console.log('Puzzle completion saved with ID:', puzzleDoc.id);
+    console.log('[PCH] completed_puzzles written', puzzleDoc.id);
 
     const updatedPuzzleData = {
       ...puzzleData,
@@ -65,60 +74,79 @@ export const handlePuzzleCompletion = async ({
       hasBeenFavorited: false
     };
 
+    console.log('[PCH] writing user_puzzles saved...');
     await setDoc(doc(db, `user_puzzles/${userId}/saved/${puzzleId}`), {
-      ...updatedPuzzleData,
-      lastPlayed: new Date(),
-      bestTime: completionTime,
-      timesPlayed: increment(1)
+        ...updatedPuzzleData,
+        lastPlayed: new Date(),
+        bestTime: completionTime,
+        timesPlayed: increment(1)
     }, { merge: true });
 
-    const userStatsRef = collection(db, 'user_stats');
-    const userStatDoc = doc(userStatsRef, userId);
-    const userStatSnap = await getDoc(userStatDoc);
+    const userStatDoc = doc(collection(db, 'user_stats'), userId);
 
-    if (userStatSnap.exists()) {
+    // getDoc can throw "client is offline"; fall back to merge-write in that case.
+    let userStatSnap = null;
+    try {
+      console.log('[PCH] reading user_stats...');
+      userStatSnap = await getDoc(userStatDoc);
+      console.log('[PCH] user_stats read, exists:', userStatSnap.exists());
+    } catch (_offlineErr) {
+      console.warn('[PCH] user_stats read failed (offline?), will merge-write:', _offlineErr.message);
+      userStatSnap = null;
+    }
+
+    if (userStatSnap?.exists()) {
       const currentStats = userStatSnap.data();
       const updates = {
         completed: increment(1),
         totalPlayTime: increment(completionTime),
         id: userId,
         lastPlayed: timestamp,
+        bestTime: !currentStats.bestTime || completionTime < currentStats.bestTime
+          ? completionTime
+          : currentStats.bestTime,
         [`bestTimes.${difficulty}`]: !currentStats.bestTimes?.[difficulty] ||
           completionTime < currentStats.bestTimes[difficulty]
           ? completionTime
           : currentStats.bestTimes[difficulty]
       };
 
-      if (completionTime < 120) {
-        updates['achievements.speed_demon'] = true;
-      }
-      if (difficulty >= 5) {
-        updates['achievements.persistent'] = true;
-      }
+      if (completionTime < 120) updates['achievements.speed_demon'] = true;
+      if (difficulty >= 5) updates['achievements.persistent'] = true;
 
+      console.log('[PCH] updating existing user_stats...');
       await updateDoc(userStatDoc, updates);
+      console.log('[PCH] user_stats updated');
     } else {
+      console.log('[PCH] creating/merging user_stats...');
       await setDoc(userStatDoc, {
-        completed: 1,
-        bestTime: completionTime,
-        id: userId
-      });
+          completed: increment(1),
+          bestTime: completionTime,
+          totalPlayTime: increment(completionTime),
+          lastPlayed: timestamp,
+          id: userId
+      }, { merge: true });
+      console.log('[PCH] user_stats created/merged');
     }
 
-    if (puzzleId) {
-      const gameRef = ref(rtdb, `games/${puzzleId}`);
-      const updates = {
-        isCompleted: true,
-        completionTime,
-        completedBy: userId,
-        completedAt: timestamp.toISOString()
-      };
-      // console.log('Preparing realtime database updates:', updates);
-      await update(gameRef, updates);
-      // console.log('Realtime database updated successfully');
+    // Only update RTDB for multiplayer games; skip for solo puzzles to avoid
+    // an unnecessary network round-trip that could also hang.
+    if (puzzleId && puzzleId.startsWith('multiplayer_')) {
+      console.log('[PCH] writing RTDB game state...');
+      try {
+        await update(ref(database, `games/${puzzleId}`), {
+            isCompleted: true,
+            completionTime,
+            completedBy: userId,
+            completedAt: timestamp.toISOString()
+        });
+        console.log('[PCH] RTDB game state written');
+      } catch (rtdbErr) {
+        console.warn('[PCH] RTDB write failed (non-fatal):', rtdbErr.message);
+      }
     }
 
-    // console.log('Puzzle completion handler finished successfully');
+    console.log('[PCH] all writes complete ✓');
     return {
       success: true,
       completionTime,
@@ -126,6 +154,7 @@ export const handlePuzzleCompletion = async ({
       puzzleDocId: puzzleDoc.id
     };
   } catch (error) {
+    console.error('[PCH] handler error:', error);
     throw error;
   }
 };
