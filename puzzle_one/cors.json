@@ -1,7 +1,20 @@
 [
   {
-    "origin": ["http://localhost:5173"],
-    "method": ["GET", "POST"],
+    "origin": [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://mwasobaddy.web.app",
+      "https://mwasobaddy.firebaseapp.com",
+      "https://puzzle-indol-gamma.vercel.app"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+    "responseHeader": [
+      "Content-Type",
+      "Authorization",
+      "Content-Length",
+      "User-Agent",
+      "x-goog-resumable"
+    ],
     "maxAgeSeconds": 3600
   }
 ]
