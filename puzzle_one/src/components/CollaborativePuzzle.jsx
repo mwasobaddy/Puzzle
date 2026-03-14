@@ -378,7 +378,7 @@ const CollaborativePuzzle = () => {
     );
   }
 
-  if (gameState?.status === 'playing' && image) {
+  if (image) {
     console.log('Transitioning to game with image:', image);
     return (
       <ErrorBoundary>
