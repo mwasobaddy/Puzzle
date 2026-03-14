@@ -691,7 +691,12 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
   const createPuzzlePieces = async (imageUrl, puzzleType = 'classic') => {
     const resolvedImageUrl = resolvePuzzleImageUrl(imageUrl);
-    if (!sceneRef.current) return;
+    if (!sceneRef.current) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
 
     puzzlePiecesRef.current.forEach(piece => {
       if (piece.geometry) piece.geometry.dispose();
