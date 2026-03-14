@@ -1217,11 +1217,14 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       const containerPieces = puzzlePiecesRef.current.filter(
         p => p.userData.containerId === targetContainer && !p.userData.isPlaced
       );
+      const typeConfig = PUZZLE_TYPES[puzzleType] || PUZZLE_TYPES.classic;
+      const gridSize = getGridForType(puzzleType, difficulty);
+      const pieceSize = calculatePieceSize(gridSize, typeConfig.settings.aspectRatio);
 
       arrangePiecesInContainer(
         containerPieces.concat(piece),
         CONTAINER_LAYOUT[targetContainer],
-        calculatePieceSize()
+        pieceSize
       );
 
       if (!ASYNC_SOLO_MODE) {
@@ -1430,7 +1433,23 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       handlePieceSnap(piece, particleSystemRef.current);
       piece.userData.isPlaced = true;
 
-      setPlacedPieces(prev => new Set([...prev, pieceId]));
+      setPlacedPieces(prev => {
+        const nextPlaced = new Set(prev);
+        nextPlaced.add(pieceId);
+
+        if (ASYNC_SOLO_MODE && totalPieces > 0) {
+          const newProgress = Math.min((nextPlaced.size / totalPieces) * 100, 100);
+          setProgress(newProgress);
+
+          if (newProgress === 100) {
+            setTimeout(() => {
+              handleGameCompletion();
+            }, 0);
+          }
+        }
+
+        return nextPlaced;
+      });
 
       if (!ASYNC_SOLO_MODE) {
         syncPieceState(pieceId, {
