@@ -196,7 +196,7 @@ const UserStats = ({ userId }) => {
               name: d.name || `${d.difficulty}x${d.difficulty} Puzzle`,
               bestTime: d.completionTime,
               difficulty: d.difficulty,
-              thumbnail: d.thumbnail || `/api/placeholder/100/100`,
+              thumbnail: d.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2NjYyIvPjwvc3ZnPg==',
               timestamp: d.timestamp?.toDate()?.toISOString()
             };
           });
@@ -217,7 +217,7 @@ const UserStats = ({ userId }) => {
                 name: `${game.difficulty}x${game.difficulty} Puzzle`,
                 currentTime: game.currentTime || 0,
                 difficulty: game.difficulty,
-                thumbnail: game.thumbnail || `/api/placeholder/100/100`,
+                thumbnail: game.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2NjYyIvPjwvc3ZnPg==',
                 startedAt: new Date(game.startTime).toISOString()
               }));
           }
@@ -282,7 +282,7 @@ const UserStats = ({ userId }) => {
           name: d.name || `${d.difficulty}x${d.difficulty} Puzzle`,
           bestTime: d.completionTime,
           difficulty: d.difficulty,
-          thumbnail: d.thumbnail || `/api/placeholder/100/100`,
+          thumbnail: d.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2NjYyIvPjwvc3ZnPg==',
           timestamp: d.timestamp?.toDate()?.toISOString()
         };
       });
