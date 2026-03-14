@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUserSubscription } from '../hooks/useUserSubscription';
 import { toast } from 'react-hot-toast';
 import UpgradeModal from './UpgradeModal';
+import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 
 const DIFFICULTY_SETTINGS = {
   easy: { grid: { x: 4, y: 3 }, snapDistance: 0.4, rotationEnabled: false },
@@ -699,7 +700,7 @@ const PuzzleGame = () => {
           sceneRef.current.add(container);
         });
 
-        const texture = await new THREE.TextureLoader().loadAsync(imageUrl);
+        const texture = await new THREE.TextureLoader().loadAsync(resolvePuzzleImageUrl(imageUrl));
         const aspectRatio = texture.image.width / texture.image.height;
         imageAspectRatioRef.current = aspectRatio;
 
@@ -1553,7 +1554,7 @@ const PuzzleGame = () => {
               className="fixed left-4 top-24 p-3 bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl"
             >
               <img
-                src={image}
+                src={resolvePuzzleImageUrl(image)}
                 alt="Reference"
                 className="w-40 md:w-48 h-auto rounded border border-gray-700"
               />

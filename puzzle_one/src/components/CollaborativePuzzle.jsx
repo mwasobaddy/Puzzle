@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import ErrorBoundary from './ErrorBoundary';
 import { PUZZLE_TYPES } from '../constants/puzzleTypes';
 import { saveRedirectPath } from '../utils/authRedirect';
+import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 
 const CollaborativePuzzle = () => {
   const { gameId } = useParams();
@@ -517,7 +518,7 @@ const CollaborativePuzzle = () => {
                   </label>
                 ) : (
                   <div className="relative rounded-xl overflow-hidden group">
-                    <img src={image} alt="Puzzle" className="w-full h-36 md:h-48 object-contain" />
+                    <img src={resolvePuzzleImageUrl(image)} alt="Puzzle" className="w-full h-36 md:h-48 object-contain" />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
                       <button
                         onClick={() => setImage(null)}

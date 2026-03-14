@@ -14,6 +14,7 @@ import {
 import { ref, get } from 'firebase/database';
 import { db, database } from '../firebase';
 import { ChevronUp, ChevronDown, Filter, Search, Info, Loader } from 'lucide-react';
+import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 
 const ITEMS_PER_PAGE = 20;
 const cache = new Map();
@@ -467,7 +468,7 @@ const UserStats = ({ userId }) => {
                     >
                       <td className="px-4 py-3">
                         <img
-                          src={puzzle.thumbnail}
+                          src={resolvePuzzleImageUrl(puzzle.thumbnail)}
                           alt={puzzle.name}
                           className="w-12 h-12 rounded object-cover"
                           loading="lazy"

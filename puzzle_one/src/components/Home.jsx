@@ -18,6 +18,7 @@ import QuickAccess from './QuickAccess';
 import toast from 'react-hot-toast';
 import { FaPuzzlePiece, FaTrophy, FaClock, FaSignOutAlt, FaChartBar, FaImage, FaGlobe, FaUsers, FaCrown, FaCheck } from 'react-icons/fa';
 import UpgradeModalHome from './UpgradeModalHome';
+import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 
 
 const getCachedData = (key) => {
@@ -514,7 +515,7 @@ const Home = ({ user }) => {
                     className="border rounded-lg p-4 hover:shadow-md transition duration-200 transform hover:scale-105"
                   >
                     <img
-                      src={puzzle.imageUrl}
+                      src={resolvePuzzleImageUrl(puzzle.imageUrl)}
                       alt="Puzzle thumbnail"
                       className="w-full h-32 object-contain rounded mb-2"
                       loading="lazy"
@@ -551,7 +552,7 @@ const Home = ({ user }) => {
                     className="border rounded-lg p-4 hover:shadow-md"
                   >
                     <img
-                      src={puzzle.thumbnail}
+                      src={resolvePuzzleImageUrl(puzzle.thumbnail)}
                       alt="Puzzle thumbnail"
                       className="w-full h-32 object-contain rounded mb-2"
                       loading="lazy"

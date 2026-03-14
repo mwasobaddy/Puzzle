@@ -12,6 +12,7 @@ import {
   Pause, Trophy, Users, Mouse, ZapIcon, Share2, X, Settings
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 
 const POINTS = {
   ACCURATE_PLACEMENT: 100,
@@ -641,7 +642,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   };
 
   const createPuzzlePieces = async (imageUrl, puzzleType = 'classic') => {
-    console.log(imageUrl);
+    const resolvedImageUrl = resolvePuzzleImageUrl(imageUrl);
     if (!sceneRef.current) return;
 
     puzzlePiecesRef.current.forEach(piece => {
@@ -652,7 +653,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     puzzlePiecesRef.current = [];
 
     try {
-      const texture = await new THREE.TextureLoader().loadAsync(imageUrl);
+      const texture = await new THREE.TextureLoader().loadAsync(resolvedImageUrl);
       const aspectRatio = texture.image.width / texture.image.height;
       const settings = DIFFICULTY_SETTINGS[difficulty];
 
@@ -1616,7 +1617,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
           style={{ touchAction: 'none' }}
         />
         {showThumbnail && (
-          <div className="absolute top-20 right-4 p-2 bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-700">            <img src={image} alt="Reference" className="w-48 h-auto rounded" />
+          <div className="absolute top-20 right-4 p-2 bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-700">            <img src={resolvePuzzleImageUrl(image)} alt="Reference" className="w-48 h-auto rounded" />
           </div>
         )}
         {showTypeSelector && (

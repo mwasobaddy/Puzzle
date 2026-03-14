@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, RotateCcw, RefreshCw } from 'lucide-react';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 
 const EnhancedPuzzle = ({ imageUrl, initialDifficulty = 3, onPiecePlace, onComplete }) => {
+  const resolvedImageUrl = resolvePuzzleImageUrl(imageUrl);
   const [pieces, setPieces] = useState([]);
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [completed, setCompleted] = useState(false);
@@ -103,8 +105,8 @@ const EnhancedPuzzle = ({ imageUrl, initialDifficulty = 3, onPiecePlace, onCompl
       setIsLoading(false);
       showMessage('Failed to load image. Please try again.', 'error');
     };
-    img.src = imageUrl;
-  }, [difficulty, imageUrl, showMessage]);
+    img.src = resolvedImageUrl;
+  }, [difficulty, resolvedImageUrl, showMessage]);
 
   useEffect(() => {
     initializePuzzle();
@@ -229,7 +231,7 @@ const EnhancedPuzzle = ({ imageUrl, initialDifficulty = 3, onPiecePlace, onCompl
           difficulty,
           timeElapsed,
           totalPieces: pieces.length,
-          imageUrl
+          imageUrl: resolvedImageUrl
         });
         showMessage('Progress saved!', 'success');
       } catch (error) {
@@ -308,7 +310,7 @@ const EnhancedPuzzle = ({ imageUrl, initialDifficulty = 3, onPiecePlace, onCompl
           <div
             className="w-48 h-48 rounded-lg overflow-hidden shadow-md"
             style={{
-              backgroundImage: `url(${imageUrl})`,
+              backgroundImage: `url(${resolvedImageUrl})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center'
             }}
@@ -375,7 +377,7 @@ const EnhancedPuzzle = ({ imageUrl, initialDifficulty = 3, onPiecePlace, onCompl
                               ${selectedPiece?.id === piece.id ? 'ring-2 ring-blue-500' : ''}
                               ${draggedPiece?.id === piece.id ? 'opacity-50' : ''}`}
                             style={{
-                              backgroundImage: `url(${imageUrl})`,
+                              backgroundImage: `url(${resolvedImageUrl})`,
                               backgroundSize: `${gridDimensions.width}px ${gridDimensions.height}px`,
                               backgroundPosition: `-${piece.dimensions.offsetX}px -${piece.dimensions.offsetY}px`,
                               transform: `rotate(${piece.rotation}deg)`,
