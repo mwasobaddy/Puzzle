@@ -91,6 +91,50 @@ const PUZZLE_TYPES = {
   }
 };
 
+const TYPE_GRID_SETTINGS = {
+  classic: {
+    easy: { x: 3, y: 2 },
+    medium: { x: 4, y: 3 },
+    hard: { x: 5, y: 4 },
+    expert: { x: 6, y: 5 }
+  },
+  vertical: {
+    easy: { x: 2, y: 3 },
+    medium: { x: 3, y: 4 },
+    hard: { x: 4, y: 5 },
+    expert: { x: 5, y: 6 }
+  },
+  panoramic: {
+    easy: { x: 4, y: 2 },
+    medium: { x: 5, y: 3 },
+    hard: { x: 6, y: 4 },
+    expert: { x: 7, y: 5 }
+  },
+  square: {
+    easy: { x: 3, y: 3 },
+    medium: { x: 4, y: 4 },
+    hard: { x: 5, y: 5 },
+    expert: { x: 6, y: 6 }
+  },
+  portrait: {
+    easy: { x: 2, y: 4 },
+    medium: { x: 3, y: 5 },
+    hard: { x: 4, y: 6 },
+    expert: { x: 5, y: 7 }
+  },
+  landscape: {
+    easy: { x: 5, y: 2 },
+    medium: { x: 6, y: 3 },
+    hard: { x: 7, y: 4 },
+    expert: { x: 8, y: 5 }
+  }
+};
+
+const getGridForType = (type, difficulty) => {
+  const fallback = DIFFICULTY_SETTINGS[difficulty]?.grid || DIFFICULTY_SETTINGS.easy.grid;
+  return TYPE_GRID_SETTINGS[type]?.[difficulty] || fallback;
+};
+
 const CONTAINER_LAYOUT = {
   left: {
     position: { x: -3.5, y: 0 },
@@ -650,42 +694,18 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
     try {
       const texture = await new THREE.TextureLoader().loadAsync(resolvedImageUrl);
-      const aspectRatio = texture.image.width / texture.image.height;
+      const typeConfig = PUZZLE_TYPES[puzzleType] || PUZZLE_TYPES.classic;
+      const aspectRatio = typeConfig.settings.aspectRatio;
       const settings = DIFFICULTY_SETTINGS[difficulty];
-
-      let baseSize = 4;
-      let gridX = settings.grid.x;
-      let gridY = settings.grid.y;
-
-      switch (puzzleType) {
-        case 'vertical':
-          baseSize = 4 / (2 / 3);
-          gridX = Math.round(gridX * (2 / 3));
-          break;
-        case 'panoramic':
-          baseSize = 4 / (16 / 9);
-          gridY = Math.round(gridY * (9 / 16));
-          break;
-        case 'square':
-          baseSize = 4;
-          gridX = gridY;
-          break;
-        case 'portrait':
-          baseSize = 4 / (3 / 5);
-          gridX = Math.round(gridX * (3 / 5));
-          break;
-        case 'landscape':
-          baseSize = 4 / (21 / 9);
-          gridY = Math.round(gridY * (9 / 21));
-          break;
-        default:
-          baseSize = 4 / (4 / 3);
-          break;
-      }
+      const typeGrid = getGridForType(puzzleType, difficulty);
+      const gridX = typeGrid.x;
+      const gridY = typeGrid.y;
+      const boardHeight = 4;
+      const boardWidth = boardHeight * aspectRatio;
 
       const pieceSize = {
-        x: (baseSize * aspectRatio) / gridX,
-        y: baseSize / gridY
+        x: boardWidth / gridX,
+        y: boardHeight / gridY
       };
 
       const containerWidth = Math.max(pieceSize.x * gridX * 0.6, 2);
