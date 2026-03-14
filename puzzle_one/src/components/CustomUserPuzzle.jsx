@@ -18,6 +18,7 @@ import { useUserSubscription } from '../hooks/useUserSubscription';
 import { toast } from 'react-hot-toast';
 import UpgradeModal from './UpgradeModal';
 import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
+import { ParticleSystem } from '../utils/ParticleSystem';
 
 const DIFFICULTY_SETTINGS = {
   easy: { grid: { x: 4, y: 3 }, snapDistance: 0.4, rotationEnabled: false },
@@ -114,62 +115,6 @@ class SoundSystem {
   toggle() {
     this.enabled = !this.enabled;
     return this.enabled;
-  }
-}
-
-class ParticleSystem {
-  constructor(scene) {
-    this.particles = [];
-    this.scene = scene;
-
-    const geometry = new THREE.BufferGeometry();
-    const material = new THREE.PointsMaterial({
-      size: 0.05,
-      map: new THREE.TextureLoader().load('/api/placeholder/32/32'),
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-
-    this.particleSystem = new THREE.Points(geometry, material);
-    scene.add(this.particleSystem);
-  }
-
-  emit(position, count = 20) {
-    for (let i = 0; i < count; i++) {
-      this.particles.push({
-        position: position.clone(),
-        velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * 0.2,
-          (Math.random() - 0.5) * 0.2,
-          Math.random() * 0.2
-        ),
-        life: 1.0
-      });
-    }
-    this.updateGeometry();
-  }
-
-  update(deltaTime) {
-    this.particles = this.particles.filter(particle => {
-      particle.life -= deltaTime;
-      particle.position.add(particle.velocity.clone().multiplyScalar(deltaTime));
-      return particle.life > 0;
-    });
-    this.updateGeometry();
-  }
-
-  updateGeometry() {
-    const positions = new Float32Array(this.particles.length * 3);
-    this.particles.forEach((particle, i) => {
-      positions[i * 3] = particle.position.x;
-      positions[i * 3 + 1] = particle.position.y;
-      positions[i * 3 + 2] = particle.position.z;
-    });
-    this.particleSystem.geometry.setAttribute(
-      'position',
-      new THREE.BufferAttribute(positions, 3)
-    );
   }
 }
 
