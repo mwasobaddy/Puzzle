@@ -1044,6 +1044,30 @@ const PuzzleGame = () => {
   };
 
   const downloadPuzzleImage = async () => {
+    const originalImageUrl = resolvePuzzleImageUrl(image);
+
+    if (originalImageUrl) {
+      try {
+        const response = await fetch(originalImageUrl, { mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch original image: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `original-puzzle-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+        return;
+      } catch (err) {
+        console.warn('Failed to download original image, falling back to capture:', err);
+      }
+    }
+
     const imageData = await capturePuzzleImage();
     if (!imageData) return;
 
