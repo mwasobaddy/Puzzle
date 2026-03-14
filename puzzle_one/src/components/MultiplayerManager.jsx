@@ -580,13 +580,9 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   useEffect(() => {
     if (gameState?.status === 'playing' && image) {
       console.log('Game state changed, image:', image);
-      createPuzzlePieces(image);
+      createPuzzlePieces(image, puzzleType);
     }
-  }, [gameState?.status, image]);
-
-  useEffect(() => {
-    console.log("MultiplayerManager received puzzleType:", puzzleType);
-  }, [puzzleType]);
+  }, [gameState?.status, image, puzzleType]);
 
 
   const resetGame = () => {
@@ -602,7 +598,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       points: 0,
       combos: 0
     });
-    createPuzzlePieces(image);
+    createPuzzlePieces(image, puzzleType);
   };
 
   const formatTime = (milliseconds) => {
@@ -963,12 +959,11 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   };
 
   const handlePuzzleTypeChange = (newType) => {
-    setPuzzleType(newType);
     setShowTypeSelector(false);
     setActiveMobilePanel(null);
     setLoading(true);
+    updateGameState({ puzzleType: newType });
     createPuzzlePieces(image, newType);
-    setupCamera(newType);
   };
 
   useEffect(() => {
