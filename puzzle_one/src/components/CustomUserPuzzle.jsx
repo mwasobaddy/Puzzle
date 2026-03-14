@@ -732,7 +732,8 @@ const PuzzleGame = () => {
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: true
+      alpha: true,
+      preserveDrawingBuffer: true
     });
     renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -1021,7 +1022,20 @@ const PuzzleGame = () => {
   const capturePuzzleImage = async () => {
     if (!containerRef.current) return null;
     try {
-      const canvas = await html2canvas(containerRef.current);
+      if (composerRef.current && rendererRef.current) {
+        composerRef.current.render();
+        return rendererRef.current.domElement.toDataURL('image/png');
+      }
+
+      if (rendererRef.current && sceneRef.current && cameraRef.current) {
+        rendererRef.current.render(sceneRef.current, cameraRef.current);
+        return rendererRef.current.domElement.toDataURL('image/png');
+      }
+
+      const canvas = await html2canvas(containerRef.current, {
+        backgroundColor: null,
+        useCORS: true,
+      });
       return canvas.toDataURL('image/png');
     } catch (err) {
       console.error('Failed to capture puzzle image:', err);
