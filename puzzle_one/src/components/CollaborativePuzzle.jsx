@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { database, ref, set, update, onValue, remove } from '../firebase';
+import { database, ref, set, update, onValue, remove, get } from '../firebase';
 import { Camera, Copy, Users, ArrowLeft, Play, Mail, Share2, LayoutTemplate, Square, Maximize, Minimize, Gamepad2, Box } from 'lucide-react';
 import MultiplayerManager from './MultiplayerManager';
 import { toast } from 'react-hot-toast';
@@ -76,21 +76,33 @@ const CollaborativePuzzle = () => {
     const initializeGame = async () => {
       if (isHost) {
         try {
-          await set(gameRef, {
-            createdAt: Date.now(),
-            hostId: userId,
-            status: 'waiting',
-            puzzleType: puzzleType,
-            players: {
-              [userId]: {
-                id: userId,
-                name: userName,
-                isHost: true,
-                joinedAt: Date.now(),
-                isOnline: true
+          const existingGameSnapshot = await get(gameRef);
+
+          if (!existingGameSnapshot.exists()) {
+            await set(gameRef, {
+              createdAt: Date.now(),
+              hostId: userId,
+              status: 'waiting',
+              puzzleType,
+              players: {
+                [userId]: {
+                  id: userId,
+                  name: userName,
+                  isHost: true,
+                  joinedAt: Date.now(),
+                  isOnline: true
+                }
               }
-            }
-          });
+            });
+          } else {
+            await update(ref(database, `games/${actualGameId}/players/${userId}`), {
+              id: userId,
+              name: userName,
+              isHost: true,
+              isOnline: true,
+              lastActive: Date.now()
+            });
+          }
 
           const baseUrl = window.location.origin + window.location.pathname;
           setInviteLink(`${baseUrl}#/puzzle/multiplayer/join_${actualGameId}`);
@@ -133,7 +145,7 @@ const CollaborativePuzzle = () => {
         remove(ref(database, `games/${actualGameId}/players/${userId}`));
       }
     };
-  }, [actualGameId, userId, isHost, userName, puzzleType]);
+  }, [actualGameId, userId, isHost, userName]);
 
   useEffect(() => {
     if (!actualGameId) return;
