@@ -9,7 +9,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import {
   Camera, Check, Info, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play,
-  Pause, Trophy, Users, Mouse, ZapIcon, Menu, X, Settings
+  Pause, Trophy, Users, Mouse, ZapIcon, Share2, X, Settings
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -519,6 +519,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   const [activePanel, setActivePanel] = useState(null);
   const [activeMobilePanel, setActiveMobilePanel] = useState(null);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
+  const [showSharePopup, setShowSharePopup] = useState(false);
   const [pieceStates, setPieceStates] = useState({});
   const [placedPieces, setPlacedPieces] = useState(new Set());
 
@@ -536,6 +537,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   const lastPlacementTimeRef = useRef(Date.now());
   const comboCountRef = useRef(0);
   const timerRef = useRef(null);
+  const hasShownSharePopupRef = useRef(false);
 
   const {
     players,
@@ -900,6 +902,63 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     setLeaderboard(prev => [...prev, finalScore].sort((a, b) => b.accurateDrops - a.accurateDrops));
     toast.success('Puzzle completed! 🎉');
     updateProgress(100);
+  };
+
+  const getShareText = () => {
+    const playerName = user?.displayName || user?.email || 'A player';
+    const winnerData = gameState?.winner || winner;
+    const winnerName = winnerData?.userName || 'Unknown';
+    const playersCount = Object.keys(players || {}).length;
+    const accuracy = gameStats.moveCount > 0
+      ? Math.round((gameStats.accurateDrops / gameStats.moveCount) * 100)
+      : 0;
+    const totalTime = timer || winnerData?.completionTime || 0;
+    const timeLabel = formatTime(totalTime);
+
+    return `I just finished a multiplayer puzzle party in ${timeLabel}! ${playerName} played with ${playersCount} players. Winner: ${winnerName}. Accuracy: ${accuracy}%. Join the next party!`;
+  };
+
+  const shareToSocial = async (platform) => {
+    const text = getShareText();
+    const encodedText = encodeURIComponent(text);
+    const shareUrl = window.location.href;
+
+    if (platform === 'native' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Puzzle Party Achievements',
+          text,
+          url: shareUrl
+        });
+      } catch (shareError) {
+        if (shareError?.name !== 'AbortError') {
+          toast.error('Failed to open native share dialog');
+        }
+      }
+      return;
+    }
+
+    if (platform === 'copy') {
+      try {
+        await navigator.clipboard.writeText(`${text} ${shareUrl}`);
+        toast.success('Achievement text copied!');
+      } catch (copyError) {
+        toast.error('Failed to copy achievement text');
+      }
+      return;
+    }
+
+    const platformUrls = {
+      whatsapp: `https://wa.me/?text=${encodedText}%20${encodeURIComponent(shareUrl)}`,
+      twitter: `https://twitter.com/intent/tweet?text=${encodedText}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodedText}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodedText}`
+    };
+
+    const targetUrl = platformUrls[platform];
+    if (!targetUrl) return;
+
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handlePuzzleTypeChange = (newType) => {
@@ -1282,6 +1341,18 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     updateProgress(progress);
   }, [progress, totalPieces, updateProgress]);
 
+  useEffect(() => {
+    if (gameState?.status === 'completed' && !hasShownSharePopupRef.current) {
+      setShowSharePopup(true);
+      hasShownSharePopupRef.current = true;
+    }
+
+    if (gameState?.status !== 'completed') {
+      hasShownSharePopupRef.current = false;
+      setShowSharePopup(false);
+    }
+  }, [gameState?.status]);
+
 
 
 
@@ -1573,6 +1644,84 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
         </button>
 
         {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
+
+        {showSharePopup && (
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <Trophy className="w-6 h-6 text-yellow-400" />
+                    Share Achievements
+                  </h3>
+                  <p className="text-gray-300 mt-2">
+                    Your puzzle party has ended. Share your result with friends.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSharePopup(false)}
+                  className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
+                  aria-label="Close share popup"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-5">
+                <p className="text-sm text-gray-200 leading-relaxed">{getShareText()}</p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {navigator.share && (
+                  <button
+                    onClick={() => shareToSocial('native')}
+                    className="px-4 py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold hover:opacity-90 flex items-center justify-center gap-2"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </button>
+                )}
+                <button
+                  onClick={() => shareToSocial('whatsapp')}
+                  className="px-4 py-3 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-500"
+                >
+                  WhatsApp
+                </button>
+                <button
+                  onClick={() => shareToSocial('twitter')}
+                  className="px-4 py-3 rounded-lg bg-sky-500 text-white font-semibold hover:bg-sky-400"
+                >
+                  X / Twitter
+                </button>
+                <button
+                  onClick={() => shareToSocial('facebook')}
+                  className="px-4 py-3 rounded-lg bg-blue-700 text-white font-semibold hover:bg-blue-600"
+                >
+                  Facebook
+                </button>
+                <button
+                  onClick={() => shareToSocial('linkedin')}
+                  className="px-4 py-3 rounded-lg bg-blue-800 text-white font-semibold hover:bg-blue-700"
+                >
+                  LinkedIn
+                </button>
+                <button
+                  onClick={() => shareToSocial('copy')}
+                  className="px-4 py-3 rounded-lg bg-gray-700 text-white font-semibold hover:bg-gray-600"
+                >
+                  Copy Text
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowSharePopup(false)}
+                className="w-full mt-5 px-4 py-3 rounded-lg border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
