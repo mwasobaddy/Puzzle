@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
+import { handlePuzzleCompletion } from './PuzzleCompletionHandler';
 
 const POINTS = {
   ACCURATE_PLACEMENT: 100,
@@ -155,6 +156,8 @@ const GRID_STYLE = {
   opacity: 0.6,
   glowStrength: 0.5
 };
+
+const ASYNC_SOLO_MODE = true;
 
 const puzzlePieceShader = {
   vertexShader: `
@@ -565,6 +568,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   const [activeMobilePanel, setActiveMobilePanel] = useState(null);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [showSharePopup, setShowSharePopup] = useState(false);
+  const [isSessionPlaying, setIsSessionPlaying] = useState(false);
   const [pieceStates, setPieceStates] = useState({});
   const [placedPieces, setPlacedPieces] = useState(new Set());
 
@@ -591,49 +595,49 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     updatePiecePosition,
     syncPieceState,
     updateGameState,
-    timer,
-    updateTimer,
     updateProgress,
     difficulty,
-    isPlaying,
-    startGame,
-    pauseGame,
     updateDifficulty,
   } = useMultiplayerGame(gameId);
 
   const startTimer = () => {
-    if (!isPlaying) {
-      startGame();
+    if (!isSessionPlaying) {
+      setIsSessionPlaying(true);
       timerRef.current = setInterval(() => {
-        setElapsedTime((prev) => {
-          const newTime = prev + 100;
-          updateTimer(newTime);
-          return newTime;
-        });
+        setElapsedTime((prev) => prev + 100);
       }, 100);
     }
   };
 
   const pauseTimer = () => {
-    if (isPlaying) {
-      pauseGame();
+    if (isSessionPlaying) {
+      setIsSessionPlaying(false);
       clearInterval(timerRef.current);
     }
   };
 
   useEffect(() => {
-    if (gameState?.status === 'playing' && image) {
+    if (image) {
       console.log('Game state changed, image:', image);
       createPuzzlePieces(image, puzzleType);
+      if (ASYNC_SOLO_MODE) {
+        clearInterval(timerRef.current);
+        setElapsedTime(0);
+        setIsSessionPlaying(false);
+        setGameStats(prev => ({
+          ...prev,
+          startTime: Date.now()
+        }));
+        setTimeout(() => startTimer(), 0);
+      }
     }
-  }, [gameState?.status, image, puzzleType]);
+  }, [image, puzzleType]);
 
 
   const resetGame = () => {
-    startGame();
     clearInterval(timerRef.current);
+    setIsSessionPlaying(false);
     setElapsedTime(0);
-    updateTimer(0);
     setProgress(0);
     setGameStats({
       moveCount: 0,
@@ -643,6 +647,9 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       combos: 0
     });
     createPuzzlePieces(image, puzzleType);
+    if (ASYNC_SOLO_MODE) {
+      setTimeout(() => startTimer(), 0);
+    }
   };
 
   const formatTime = (milliseconds) => {
@@ -811,13 +818,15 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       pieces.forEach(piece => {
         sceneRef.current.add(piece);
         puzzlePiecesRef.current.push(piece);
-        syncPieceState(piece.userData.id, {
-          x: piece.position.x,
-          y: piece.position.y,
-          z: piece.position.z,
-          rotation: piece.rotation.z,
-          isPlaced: false
-        });
+        if (!ASYNC_SOLO_MODE) {
+          syncPieceState(piece.userData.id, {
+            x: piece.position.x,
+            y: piece.position.y,
+            z: piece.position.z,
+            rotation: piece.rotation.z,
+            isPlaced: false
+          });
+        }
       });
 
       setTotalPieces(gridX * gridY);
@@ -864,13 +873,15 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
         piece.userData.isPlaced = true;
         piece.material.uniforms.correctPosition.value = 1.0;
 
-        syncPieceState(piece.userData.id, {
-          x: originalPos.x,
-          y: originalPos.y,
-          z: originalPos.z,
-          rotation: 0,
-          isPlaced: true
-        });
+        if (!ASYNC_SOLO_MODE) {
+          syncPieceState(piece.userData.id, {
+            x: originalPos.x,
+            y: originalPos.y,
+            z: originalPos.z,
+            rotation: 0,
+            isPlaced: true
+          });
+        }
 
         if (particleSystem) {
           particleSystem.emit(piece.position, 20, new THREE.Color(0x00ff00));
@@ -910,15 +921,31 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     };
 
     setWinner(finalScore);
-    await updateGameState({
-      status: 'completed',
-      winner: finalScore,
-      endedAt: endTime
+    if (!ASYNC_SOLO_MODE) {
+      await updateGameState({
+        status: 'completed',
+        winner: finalScore,
+        endedAt: endTime
+      });
+    }
+
+    const completionData = {
+      puzzleId: `multiplayer_${gameId}_${user.uid}_${endTime}`,
+      userId: user.uid,
+      playerName: user.displayName || user.email || 'Anonymous',
+      difficulty: DIFFICULTY_SETTINGS[difficulty]?.grid?.x || 3,
+      name: `${(PUZZLE_TYPES[puzzleType]?.name || 'Multiplayer')} Puzzle`,
+      pieceCount: totalPieces,
+      imageUrl: image,
+      timer: completionTime,
+    };
+
+    handlePuzzleCompletion(completionData).catch((err) => {
+      console.error('[Multiplayer] Background completion write failed:', err);
     });
 
     setLeaderboard(prev => [...prev, finalScore].sort((a, b) => b.accurateDrops - a.accurateDrops));
     toast.success('Puzzle completed! 🎉');
-    updateProgress(100);
   };
 
   const getShareText = () => {
@@ -929,7 +956,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     const accuracy = gameStats.moveCount > 0
       ? Math.round((gameStats.accurateDrops / gameStats.moveCount) * 100)
       : 0;
-    const totalTime = timer || winnerData?.completionTime || 0;
+    const totalTime = elapsedTime || winnerData?.completionTime || 0;
     const timeLabel = formatTime(totalTime);
 
     return `I just finished a multiplayer puzzle party in ${timeLabel}! ${playerName} played with ${playersCount} players. Winner: ${winnerName}. Accuracy: ${accuracy}%. Join the next party!`;
@@ -1087,7 +1114,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     let moveStartTime = null;
 
     const onMouseDown = (event) => {
-      if (!isPlaying) return;
+      if (!isSessionPlaying) return;
 
       const rect = rendererRef.current.domElement.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1116,7 +1143,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
 
     const onMouseMove = (event) => {
-      if (!isDragging || !selectedPieceRef.current || !isPlaying) return;
+      if (!isDragging || !selectedPieceRef.current || !isSessionPlaying) return;
 
       const rect = rendererRef.current.domElement.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1131,13 +1158,15 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
       selectedPieceRef.current.position.copy(intersectPoint);
 
-      updatePiecePosition(selectedPieceRef.current.userData.id, {
-        x: intersectPoint.x,
-        y: intersectPoint.y,
-        z: intersectPoint.z,
-        rotation: selectedPieceRef.current.rotation.z,
-        lastUpdatedBy: user.uid
-      });
+      if (!ASYNC_SOLO_MODE) {
+        updatePiecePosition(selectedPieceRef.current.userData.id, {
+          x: intersectPoint.x,
+          y: intersectPoint.y,
+          z: intersectPoint.z,
+          rotation: selectedPieceRef.current.rotation.z,
+          lastUpdatedBy: user.uid
+        });
+      }
 
       const originalPos = selectedPieceRef.current.userData.originalPosition;
       const distance = originalPos.distanceTo(selectedPieceRef.current.position);
@@ -1154,7 +1183,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     };
 
     const onMouseUp = () => {
-      if (!selectedPieceRef.current || !isPlaying) return;
+      if (!selectedPieceRef.current || !isSessionPlaying) return;
 
       const piece = selectedPieceRef.current;
       const wasPlaced = handlePiecePlacement(piece, piece.position);
@@ -1186,14 +1215,16 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
         calculatePieceSize()
       );
 
-      syncPieceState(piece.userData.id, {
-        x: piece.position.x,
-        y: piece.position.y,
-        z: piece.position.z,
-        isPlaced: false,
-        lastUpdatedBy: user.uid,
-        timestamp: Date.now()
-      });
+      if (!ASYNC_SOLO_MODE) {
+        syncPieceState(piece.userData.id, {
+          x: piece.position.x,
+          y: piece.position.y,
+          z: piece.position.z,
+          isPlaced: false,
+          lastUpdatedBy: user.uid,
+          timestamp: Date.now()
+        });
+      }
     };
 
     const element = rendererRef.current.domElement;
@@ -1208,7 +1239,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       element.removeEventListener('mouseup', onMouseUp);
       element.removeEventListener('mouseleave', onMouseUp);
     };
-  }, [updatePiecePosition, totalPieces, isPlaying, progress]);
+  }, [totalPieces, isSessionPlaying, progress]);
 
   const createPlacementGuides = (gridSize, pieceSize) => {
     guideOutlinesRef.current.forEach(guide => sceneRef.current.remove(guide));
@@ -1301,17 +1332,8 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     });
   };
 
-  const toggleGameState = () => {
-    if (gameState === 'playing') {
-      updateGameState({ status: 'paused' });
-      clearInterval(timerRef.current);
-    } else {
-      updateGameState({ status: 'playing' });
-      startTimer();
-    }
-  };
-
   useEffect(() => {
+    if (ASYNC_SOLO_MODE) return;
     if (!gameState?.pieces || !puzzlePiecesRef.current.length || !totalPieces) return;
 
     const pieceEntries = Object.entries(gameState.pieces).filter(([, pieceData]) => (
@@ -1354,20 +1376,28 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
   useEffect(() => {
     if (!totalPieces || progress <= 0) return;
-    updateProgress(progress);
-  }, [progress, totalPieces, updateProgress]);
+    if (!ASYNC_SOLO_MODE) {
+      updateProgress(progress);
+    }
+  }, [progress, totalPieces]);
 
   useEffect(() => {
-    if (gameState?.status === 'completed' && !hasShownSharePopupRef.current) {
+    if (ASYNC_SOLO_MODE && progress === 100 && !hasShownSharePopupRef.current) {
+      setShowSharePopup(true);
+      hasShownSharePopupRef.current = true;
+      return;
+    }
+
+    if (!ASYNC_SOLO_MODE && gameState?.status === 'completed' && !hasShownSharePopupRef.current) {
       setShowSharePopup(true);
       hasShownSharePopupRef.current = true;
     }
 
-    if (gameState?.status !== 'completed') {
+    if ((!ASYNC_SOLO_MODE && gameState?.status !== 'completed') || (ASYNC_SOLO_MODE && progress < 100)) {
       hasShownSharePopupRef.current = false;
       setShowSharePopup(false);
     }
-  }, [gameState?.status]);
+  }, [gameState?.status, progress]);
 
 
 
@@ -1380,11 +1410,12 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     const isNearCorrect = checkPiecePosition(piece, position);
 
     if (isNearCorrect) {
-      if (gameState?.pieces?.[pieceId]?.isPlaced &&
-        gameState.pieces[pieceId].lastUpdatedBy !== user.uid) {
-        returnPieceToContainer(piece);
-        toast.error('Piece already placed by another player');
-        return false;
+      if (!ASYNC_SOLO_MODE) {
+        if (gameState?.pieces?.[pieceId]?.isPlaced && gameState.pieces[pieceId].lastUpdatedBy !== user.uid) {
+          returnPieceToContainer(piece);
+          toast.error('Piece already placed by another player');
+          return false;
+        }
       }
 
       handlePieceSnap(piece, particleSystemRef.current);
@@ -1392,15 +1423,17 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
       setPlacedPieces(prev => new Set([...prev, pieceId]));
 
-      syncPieceState(pieceId, {
-        x: piece.userData.originalPosition.x,
-        y: piece.userData.originalPosition.y,
-        z: piece.userData.originalPosition.z,
-        rotation: 0,
-        isPlaced: true,
-        lastUpdatedBy: user.uid,
-        timestamp: Date.now()
-      });
+      if (!ASYNC_SOLO_MODE) {
+        syncPieceState(pieceId, {
+          x: piece.userData.originalPosition.x,
+          y: piece.userData.originalPosition.y,
+          z: piece.userData.originalPosition.z,
+          rotation: 0,
+          isPlaced: true,
+          lastUpdatedBy: user.uid,
+          timestamp: Date.now()
+        });
+      }
 
       return true;
     }
@@ -1448,27 +1481,25 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
           <div className="flex-1 max-w-md mx-auto flex flex-col items-center">
             <div className="flex items-center gap-4 mb-2">
-              {isHost && (
-                <div className="flex items-center rounded-lg overflow-hidden bg-gray-800/50">
-                  <button
-                    onClick={startTimer}
-                    disabled={isPlaying}
-                    className="p-2 hover:bg-blue-500/20 disabled:opacity-50 transition-colors"
-                  >
-                    <Play className="w-5 h-5 text-blue-400" />
-                  </button>
-                  <button
-                    onClick={pauseTimer}
-                    disabled={!isPlaying}
-                    className="p-2 hover:bg-yellow-500/20 disabled:opacity-50 transition-colors"
-                  >
-                    <Pause className="w-5 h-5 text-yellow-400" />
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center rounded-lg overflow-hidden bg-gray-800/50">
+                <button
+                  onClick={startTimer}
+                  disabled={isSessionPlaying}
+                  className="p-2 hover:bg-blue-500/20 disabled:opacity-50 transition-colors"
+                >
+                  <Play className="w-5 h-5 text-blue-400" />
+                </button>
+                <button
+                  onClick={pauseTimer}
+                  disabled={!isSessionPlaying}
+                  className="p-2 hover:bg-yellow-500/20 disabled:opacity-50 transition-colors"
+                >
+                  <Pause className="w-5 h-5 text-yellow-400" />
+                </button>
+              </div>
               <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-lg text-white font-mono text-lg">
                 <Clock className="w-5 h-5 text-green-400" />
-                <span>{formatTime(timer)}</span>
+                <span>{formatTime(elapsedTime)}</span>
               </div>
             </div>
             <div className="w-full bg-gray-800/50 rounded-full h-2.5">
