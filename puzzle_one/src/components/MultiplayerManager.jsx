@@ -620,6 +620,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     if (image) {
       console.log('Game state changed, image:', image);
       createPuzzlePieces(image, puzzleType);
+      setProgress(0);
       if (ASYNC_SOLO_MODE) {
         clearInterval(timerRef.current);
         setElapsedTime(0);
