@@ -1442,6 +1442,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
           setProgress(newProgress);
 
           if (newProgress === 100) {
+            setIsSessionPlaying(false);
             setTimeout(() => {
               handleGameCompletion();
             }, 0);
