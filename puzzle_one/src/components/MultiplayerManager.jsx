@@ -910,6 +910,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   const handleGameCompletion = async () => {
     const endTime = Date.now();
     const completionTime = endTime - gameStats.startTime;
+    const completionTimeSeconds = Number((completionTime / 1000).toFixed(2));
     const accuracy = (gameStats.accurateDrops / gameStats.moveCount) * 100;
 
     const timeBonus = Math.max(0, 1000 - Math.floor(completionTime / 1000)) * 2;
@@ -944,7 +945,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       name: `${(PUZZLE_TYPES[puzzleType]?.name || 'Multiplayer')} Puzzle`,
       pieceCount: totalPieces,
       imageUrl: image,
-      timer: completionTime,
+      timer: completionTimeSeconds,
     };
 
     handlePuzzleCompletion(completionData).catch((err) => {

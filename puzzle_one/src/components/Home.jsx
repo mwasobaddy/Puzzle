@@ -40,6 +40,13 @@ const setCachedData = (key, data) => {
   localStorage.setItem(key, JSON.stringify(cache));
 };
 
+const normalizeTimeToSeconds = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  // Legacy multiplayer entries were stored in milliseconds.
+  return numericValue > 10000 ? numericValue / 1000 : numericValue;
+};
+
 const useUserData = (userId) => {
   const [data, setData] = useState({
     recentPuzzles: [],
@@ -79,14 +86,18 @@ const useUserData = (userId) => {
 
     const calculateAverageTime = (puzzles) => {
       if (!puzzles.length) return null;
-      const totalTime = puzzles.reduce((sum, puzzle) => sum + puzzle.completionTime, 0);
+      const totalTime = puzzles.reduce(
+        (sum, puzzle) => sum + (normalizeTimeToSeconds(puzzle.completionTime) || 0),
+        0
+      );
       return Math.round(totalTime / puzzles.length);
     };
 
     const unsubscribePuzzles = onSnapshot(puzzlesQuery, (puzzleSnap) => {
       const puzzlesData = puzzleSnap.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        completionTime: normalizeTimeToSeconds(doc.data().completionTime)
       })).reverse();
 
       const averageTime = calculateAverageTime(puzzlesData);
@@ -125,7 +136,7 @@ const useUserData = (userId) => {
           stats: {
             ...prev.stats,
             completed: statsData.completed || 0,
-            bestTime: statsData.bestTime
+            bestTime: normalizeTimeToSeconds(statsData.bestTime)
           },
           loading: false,
           error: null
