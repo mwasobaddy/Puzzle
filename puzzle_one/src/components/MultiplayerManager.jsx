@@ -569,6 +569,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [isSessionPlaying, setIsSessionPlaying] = useState(false);
+  const [isSceneReady, setIsSceneReady] = useState(false);
   const [pieceStates, setPieceStates] = useState({});
   const [placedPieces, setPlacedPieces] = useState(new Set());
 
@@ -617,7 +618,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   };
 
   useEffect(() => {
-    if (image) {
+    if (image && isSceneReady) {
       console.log('Game state changed, image:', image);
       createPuzzlePieces(image, puzzleType);
       setProgress(0);
@@ -632,7 +633,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
         setTimeout(() => startTimer(), 0);
       }
     }
-  }, [image, puzzleType]);
+  }, [image, puzzleType, isSceneReady]);
 
 
   const resetGame = () => {
@@ -1025,6 +1026,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a1a);
     sceneRef.current = scene;
+    setIsSceneReady(true);
 
     const width = containerRef.current.clientWidth;
     const height = containerRef.current.clientHeight;
@@ -1095,6 +1097,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      setIsSceneReady(false);
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
       composer.dispose();
