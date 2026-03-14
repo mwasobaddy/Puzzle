@@ -158,12 +158,12 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
     }
   }, [gameId, isHost]);
 
-  const syncPieceState = useCallback(async (piecesData) => {
-    if (!gameId || !isHost) return;
+  const syncPieceState = useCallback(async (pieceId, pieceData) => {
+    if (!gameId || !pieceId) return;
 
     try {
-      await set(ref(database, `games/${gameId}/pieces`), {
-        ...piecesData,
+      await update(ref(database, `games/${gameId}/pieces/${pieceId}`), {
+        ...pieceData,
         lastUpdated: Date.now()
       });
     } catch (error) {
@@ -171,7 +171,7 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
       setError('Failed to sync pieces');
       toast.error('Failed to sync pieces');
     }
-  }, [gameId, isHost]);
+  }, [gameId]);
 
   const setPlayerReady = useCallback(async (ready = true) => {
     if (!gameId || !userId) return;
