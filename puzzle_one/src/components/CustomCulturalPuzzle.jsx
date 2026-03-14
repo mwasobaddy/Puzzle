@@ -356,7 +356,6 @@ const PuzzleGame = () => {
   const selectedPieceRef = useRef(null);
   const timerRef = useRef(null);
   const guideOutlinesRef = useRef([]);
-  const puzzleContainerRef = useRef(null);
   const soundRef = useRef(null);
   // Ref mirrors timeElapsed so synchronousCompletion always reads the live value
   const timeElapsedRef = useRef(0);
@@ -909,9 +908,9 @@ const PuzzleGame = () => {
   };
 
   const capturePuzzleImage = async () => {
-    if (!puzzleContainerRef.current) return null;
+    if (!containerRef.current) return null;
     try {
-      const canvas = await html2canvas(puzzleContainerRef.current);
+      const canvas = await html2canvas(containerRef.current);
       return canvas.toDataURL('image/png');
     } catch (err) {
       console.error('Failed to capture puzzle image:', err);
