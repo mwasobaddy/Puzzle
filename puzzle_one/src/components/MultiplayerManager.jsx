@@ -500,7 +500,6 @@ const PuzzleTypeSelector = ({ onSelect, currentType, onClose }) => (
 const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [completedPieces, setCompletedPieces] = useState(0);
   const [totalPieces, setTotalPieces] = useState(0);
   const [showThumbnail, setShowThumbnail] = useState(false);
   const [gameStats, setGameStats] = useState({
@@ -547,7 +546,6 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     updateGameState,
     timer,
     updateTimer,
-    progress: syncedProgress,
     updateProgress,
     difficulty,
     isPlaying,
@@ -593,7 +591,6 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     clearInterval(timerRef.current);
     setElapsedTime(0);
     updateTimer(0);
-    setCompletedPieces(0);
     setProgress(0);
     setGameStats({
       moveCount: 0,
@@ -854,19 +851,6 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
           z: originalPos.z,
           rotation: 0,
           isPlaced: true
-        });
-
-        setCompletedPieces(prev => {
-          const newCount = prev + 1;
-          const newProgress = (newCount / totalPieces) * 100;
-          setProgress(newProgress);
-          updateProgress(newProgress);
-          console.log("Progress Update");
-
-          if (newProgress === 100) {
-            handleGameCompletion();
-          }
-          return newCount;
         });
 
         if (particleSystem) {
@@ -1253,79 +1237,50 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   };
 
   useEffect(() => {
-    if (!gameState?.pieces || !puzzlePiecesRef.current.length) return;
+    if (!gameState?.pieces || !puzzlePiecesRef.current.length || !totalPieces) return;
 
-    Object.entries(gameState.pieces).forEach(([pieceId, pieceData]) => {
+    const pieceEntries = Object.entries(gameState.pieces).filter(([, pieceData]) => (
+      pieceData && typeof pieceData === 'object' && Object.prototype.hasOwnProperty.call(pieceData, 'isPlaced')
+    ));
+
+    pieceEntries.forEach(([pieceId, pieceData]) => {
       const piece = puzzlePiecesRef.current.find(p => p.userData.id === pieceId);
-      if (piece && pieceData.lastUpdatedBy !== user.uid) {
-        piece.position.set(pieceData.x, pieceData.y, pieceData.z);
-        if (pieceData.rotation !== undefined) {
-          piece.rotation.z = pieceData.rotation;
-        }
-        piece.userData.isPlaced = pieceData.isPlaced;
-        if (piece.material.uniforms) {
-          piece.material.uniforms.correctPosition.value = pieceData.isPlaced ? 1.0 : 0.0;
-        }
+      if (!piece) return;
+
+      piece.position.set(pieceData.x, pieceData.y, pieceData.z);
+      if (pieceData.rotation !== undefined) {
+        piece.rotation.z = pieceData.rotation;
       }
-    });
 
-    setProgress(syncedProgress);
-  }, [gameState?.pieces, syncedProgress, user.uid]);
+      piece.userData.isPlaced = Boolean(pieceData.isPlaced);
+      if (piece.material.uniforms) {
+        piece.material.uniforms.correctPosition.value = piece.userData.isPlaced ? 1.0 : 0.0;
+      }
 
-  useEffect(() => {
-    if (!gameState?.pieces || !totalPieces) return;
-
-    const placedPieceIds = new Set(
-      Object.keys(gameState.pieces).filter(id => gameState.pieces[id].isPlaced)
-    );
-
-    setPlacedPieces(placedPieceIds);
-
-    puzzlePiecesRef.current.forEach(piece => {
-      if (placedPieceIds.has(piece.userData.id)) {
-        piece.userData.isPlaced = true;
+      if (piece.userData.isPlaced) {
         piece.position.copy(piece.userData.originalPosition);
-        if (piece.material.uniforms) {
-          piece.material.uniforms.correctPosition.value = 1.0;
-        }
-      }
-    });
-
-    const newProgress = (placedPieceIds.size / totalPieces) * 100;
-    setProgress(newProgress);
-    updateProgress(newProgress);
-  }, [gameState?.pieces, totalPieces]);
-
-  useEffect(() => {
-    if (!gameState?.pieces || !puzzlePiecesRef.current.length) return;
-
-    Object.entries(gameState.pieces).forEach(([pieceId, pieceData]) => {
-      const piece = puzzlePiecesRef.current.find(p => p.userData.id === pieceId);
-      if (piece) {
-        piece.position.set(pieceData.x, pieceData.y, pieceData.z);
-        if (pieceData.rotation !== undefined) {
-          piece.rotation.z = pieceData.rotation;
-        }
-        piece.userData.isPlaced = pieceData.isPlaced;
-        if (piece.material.uniforms) {
-          piece.material.uniforms.correctPosition.value = pieceData.isPlaced ? 1.0 : 0.0;
-        }
       }
     });
 
     const placedPieceIds = new Set(
-      Object.keys(gameState.pieces).filter(id => gameState.pieces[id].isPlaced)
+      pieceEntries
+        .filter(([, pieceData]) => Boolean(pieceData.isPlaced))
+        .map(([pieceId]) => pieceId)
     );
-    const newProgress = (placedPieceIds.size / totalPieces) * 100;
+
+    const newProgress = Math.min((placedPieceIds.size / totalPieces) * 100, 100);
+    setPlacedPieces(placedPieceIds);
     setProgress(newProgress);
-    updateProgress(newProgress);
-  }, [gameState?.pieces, totalPieces]);
+
+    if (newProgress === 100 && gameState?.status !== 'completed') {
+      handleGameCompletion();
+    }
+  }, [gameState?.pieces, totalPieces, gameState?.status]);
 
   useEffect(() => {
-    if (gameState?.progress !== undefined) {
-      setProgress(prevProgress => (gameState.progress > prevProgress ? gameState.progress : prevProgress));
-    }
-  }, [gameState?.progress]);
+    if (!totalPieces || progress <= 0) return;
+    updateProgress(progress);
+  }, [progress, totalPieces, updateProgress]);
 
 
 
