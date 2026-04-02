@@ -558,7 +558,6 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     combos: 0
   });
   const [winner, setWinner] = useState(null);
-  const [leaderboard, setLeaderboard] = useState([]);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [progress, setProgress] = useState(0);
   const [showTutorial, setShowTutorial] = useState(true);
@@ -592,6 +591,8 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   const {
     players,
     gameState,
+    pieces,
+    leaderboard: syncedLeaderboard,
     error,
     updatePiecePosition,
     syncPieceState,
@@ -599,6 +600,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     updateProgress,
     difficulty,
     updateDifficulty,
+    addLeaderboardEntry,
   } = useMultiplayerGame(gameId);
 
   const startTimer = () => {
@@ -952,19 +954,22 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       console.error('[Multiplayer] Background completion write failed:', err);
     });
 
-    setLeaderboard(prev => [...prev, finalScore].sort((a, b) => b.accurateDrops - a.accurateDrops));
+    if (!ASYNC_SOLO_MODE) {
+      await addLeaderboardEntry(finalScore);
+    }
+
     toast.success('Puzzle completed! 🎉');
   };
 
   const getShareText = () => {
     const playerName = user?.displayName || user?.email || 'A player';
-    const winnerData = gameState?.winner || winner;
-    const winnerName = winnerData?.userName || 'Unknown';
+    const firstPlace = syncedLeaderboard && syncedLeaderboard.length > 0 ? syncedLeaderboard[0] : (gameState?.winner || winner);
+    const winnerName = firstPlace?.userName || 'Unknown';
     const playersCount = Object.keys(players || {}).length;
     const accuracy = gameStats.moveCount > 0
       ? Math.round((gameStats.accurateDrops / gameStats.moveCount) * 100)
       : 0;
-    const totalTime = elapsedTime || winnerData?.completionTime || 0;
+    const totalTime = elapsedTime || firstPlace?.completionTime || 0;
     const timeLabel = formatTime(totalTime);
 
     return `I just finished a multiplayer puzzle party in ${timeLabel}! ${playerName} played with ${playersCount} players. Winner: ${winnerName}. Accuracy: ${accuracy}%. Join the next party!`;
@@ -1347,9 +1352,9 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
   useEffect(() => {
     if (ASYNC_SOLO_MODE) return;
-    if (!gameState?.pieces || !puzzlePiecesRef.current.length || !totalPieces) return;
+    if (!pieces || !puzzlePiecesRef.current.length || !totalPieces) return;
 
-    const pieceEntries = Object.entries(gameState.pieces).filter(([, pieceData]) => (
+    const pieceEntries = Object.entries(pieces).filter(([, pieceData]) => (
       pieceData && typeof pieceData === 'object' && Object.prototype.hasOwnProperty.call(pieceData, 'isPlaced')
     ));
 
@@ -1385,7 +1390,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     if (newProgress === 100 && gameState?.status !== 'completed') {
       handleGameCompletion();
     }
-  }, [gameState?.pieces, totalPieces, gameState?.status]);
+  }, [pieces, totalPieces, gameState?.status]);
 
   useEffect(() => {
     if (!totalPieces || progress <= 0) return;
@@ -1724,29 +1729,59 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
         {showSharePopup && (
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+            <div className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
                   <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                     <Trophy className="w-6 h-6 text-yellow-400" />
-                    Share Achievements
+                    Puzzle Party Complete!
                   </h3>
                   <p className="text-gray-300 mt-2">
-                    Your puzzle party has ended. Share your result with friends.
+                    Final Leaderboard
                   </p>
                 </div>
                 <button
                   onClick={() => setShowSharePopup(false)}
-                  className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
+                  className="p-2 rounded-lg hover:bg-gray-800 transition-colors flex-shrink-0"
                   aria-label="Close share popup"
                 >
                   <X className="w-5 h-5 text-gray-400" />
                 </button>
               </div>
 
-              <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-5">
-                <p className="text-sm text-gray-200 leading-relaxed">{getShareText()}</p>
-              </div>
+              {syncedLeaderboard && syncedLeaderboard.length > 0 && (
+                <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-5">
+                  <div className="space-y-2">
+                    {syncedLeaderboard.map((entry, index) => (
+                      <div
+                        key={entry.userId}
+                        className={`flex items-center justify-between p-3 rounded-lg ${
+                          index === 0
+                            ? 'bg-yellow-500/20 border border-yellow-500/50'
+                            : index === 1
+                            ? 'bg-gray-500/20 border border-gray-500/50'
+                            : index === 2
+                            ? 'bg-orange-500/20 border border-orange-500/50'
+                            : 'bg-gray-700/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-bold text-gray-400 w-8">#{index + 1}</span>
+                          <div>
+                            <p className="text-white font-semibold">{entry.userName}</p>
+                            <p className="text-sm text-gray-400">
+                              {Math.round(entry.accuracy)}% accuracy • {(entry.completionTime / 1000).toFixed(1)}s
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-lg font-bold text-yellow-400">{entry.points}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-sm text-gray-200 leading-relaxed mb-5">{getShareText()}</p>
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {navigator.share && (
@@ -1794,7 +1829,7 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
                 onClick={() => setShowSharePopup(false)}
                 className="w-full mt-5 px-4 py-3 rounded-lg border border-gray-600 text-gray-200 hover:bg-gray-800 transition-colors"
               >
-                Maybe Later
+                Close
               </button>
             </div>
           </div>
