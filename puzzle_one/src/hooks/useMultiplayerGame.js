@@ -8,12 +8,15 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
     status: 'waiting',
     isPlaying: false,
     totalPiecesPlaced: 0,
+    pieces: {},
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timer, setTimer] = useState(0);
   const [progress, setProgress] = useState(0);
   const [difficulty, setDifficulty] = useState('easy');
+  const [pieces, setPieces] = useState({});
+  const [leaderboard, setLeaderboard] = useState([]);
 
   const userData = JSON.parse(localStorage.getItem('authUser'));
   const userId = userData?.uid;
@@ -25,6 +28,8 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
     const gameRef = ref(database, `games/${gameId}`);
     const playersRef = ref(database, `games/${gameId}/players`);
     const userRef = ref(database, `games/${gameId}/players/${userId}`);
+    const piecesRef = ref(database, `games/${gameId}/pieces`);
+    const leaderboardRef = ref(database, `games/${gameId}/leaderboard`);
 
     try {
       const playerData = {
@@ -45,11 +50,12 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
       const gameListener = onValue(gameRef, (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          setGameState({
+          setGameState(prevState => ({
             ...data,
             isPlaying: data.status === 'playing',
             totalPiecesPlaced: data.totalPiecesPlaced || 0,
-          });
+            pieces: prevState.pieces,
+          }));
           setLoading(false);
         } else {
           setError('Game not found');
@@ -65,6 +71,35 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
         const data = snapshot.val();
         if (data) {
           setPlayers(data);
+        }
+      });
+
+      const piecesListener = onValue(piecesRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setPieces(data);
+          setGameState(prevState => ({
+            ...prevState,
+            pieces: data,
+          }));
+        } else {
+          setPieces({});
+          setGameState(prevState => ({
+            ...prevState,
+            pieces: {},
+          }));
+        }
+      });
+
+      const leaderboardListener = onValue(leaderboardRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data && Array.isArray(data)) {
+          setLeaderboard(data.sort((a, b) => b.points - a.points));
+        } else if (data && typeof data === 'object') {
+          const leaderboardArray = Object.values(data).filter(entry => entry && typeof entry === 'object');
+          setLeaderboard(leaderboardArray.sort((a, b) => b.points - a.points));
+        } else {
+          setLeaderboard([]);
         }
       });
 
@@ -89,6 +124,8 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
       return () => {
         gameListener();
         playersListener();
+        piecesListener();
+        leaderboardListener();
         timerListener();
         progressListener();
         difficultyListener();
@@ -279,9 +316,27 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
     }
   }, [gameId]);
 
+  const addLeaderboardEntry = useCallback(async (score) => {
+    if (!gameId || !score) return;
+
+    try {
+      const leaderboardRef = ref(database, `games/${gameId}/leaderboard/${score.userId}`);
+      await set(leaderboardRef, {
+        ...score,
+        timestamp: Date.now()
+      });
+      console.log('✅ Leaderboard entry added:', score.userName);
+    } catch (error) {
+      console.error('Failed to add leaderboard entry:', error);
+      toast.error('Failed to update leaderboard');
+    }
+  }, [gameId]);
+
   return {
     players,
     gameState,
+    pieces,
+    leaderboard,
     error,
     loading,
     isHost,
@@ -303,6 +358,7 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
     updateTimer,
     updateProgress,
     updateDifficulty,
+    addLeaderboardEntry,
 
     isGameComplete: checkGameCompletion(),
     isPlayerReady: players[userId]?.ready || false,
