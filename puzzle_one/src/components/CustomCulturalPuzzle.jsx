@@ -499,7 +499,7 @@ const PuzzleGame = () => {
     }
   };
 
-  const createPuzzlePieces = async (imageUrl) => {
+  const createPuzzlePieces = async (imageUrl, difficulty = null) => {
     if (!sceneRef.current) return;
 
     return new Promise(async (resolve, reject) => {
@@ -530,7 +530,7 @@ const PuzzleGame = () => {
         const texture = await new THREE.TextureLoader().loadAsync(resolvePuzzleImageUrl(imageUrl));
         const aspectRatio = texture.image.width / texture.image.height;
         const baseSize = 3.5;
-        const gridSize = selectedDifficulty.grid;
+        const gridSize = (difficulty || selectedDifficulty).grid;
         const pieceSize = {
           x: (baseSize * aspectRatio) / gridSize.x,
           y: baseSize / gridSize.y
@@ -641,8 +641,8 @@ const PuzzleGame = () => {
           incompletePuzzleDocRef.current = urlGameId;
           setShowImageSelection(false);
 
-          // Recreate the puzzle pieces with the loaded image
-          await createPuzzlePieces(puzzleData.image);
+          // Recreate the puzzle pieces with the loaded image and difficulty
+          await createPuzzlePieces(puzzleData.image, puzzleData.selectedDifficulty);
           
           setLoading(false);
           // Start the game after puzzle is loaded
