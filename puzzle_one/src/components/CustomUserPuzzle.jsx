@@ -447,8 +447,15 @@ const PuzzleGame = () => {
 
         if (docSnap.exists()) {
           const puzzleData = docSnap.data();
+          const savedImage = puzzleData.image || puzzleData.imageUrl;
           
-          setImage(puzzleData.image);
+          if (!savedImage) {
+            toast.error('Puzzle image is missing.');
+            navigate('/');
+            return;
+          }
+
+          setImage(savedImage);
           setDifficulty(puzzleData.difficulty);
           setSelectedDifficulty(puzzleData.selectedDifficulty);
           setTimeElapsed(puzzleData.timeElapsed || 0);
@@ -460,7 +467,7 @@ const PuzzleGame = () => {
           incompletePuzzleDocRef.current = urlGameId;
 
           // Recreate the puzzle pieces
-          await createPuzzlePieces(puzzleData.image, puzzleData.selectedDifficulty);
+          await createPuzzlePieces(savedImage, puzzleData.selectedDifficulty);
           
           setLoading(false);
           

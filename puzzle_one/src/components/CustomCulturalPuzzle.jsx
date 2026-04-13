@@ -627,9 +627,16 @@ const PuzzleGame = () => {
 
         if (docSnap.exists()) {
           const puzzleData = docSnap.data();
+          const savedImage = puzzleData.image || puzzleData.imageUrl;
           
+          if (!savedImage) {
+            toast.error('Puzzle image is missing.');
+            navigate('/');
+            return;
+          }
+
           // Set all state before creating pieces
-          setImage(puzzleData.image);
+          setImage(savedImage);
           setDifficulty(puzzleData.difficulty);
           setSelectedDifficulty(puzzleData.selectedDifficulty);
           setTimeElapsed(puzzleData.timeElapsed || 0);
@@ -642,7 +649,7 @@ const PuzzleGame = () => {
           setShowImageSelection(false);
 
           // Recreate the puzzle pieces with the loaded image and difficulty
-          await createPuzzlePieces(puzzleData.image, puzzleData.selectedDifficulty);
+          await createPuzzlePieces(savedImage, puzzleData.selectedDifficulty);
           
           setLoading(false);
           // Start the game after puzzle is loaded
