@@ -616,7 +616,7 @@ const PuzzleGame = () => {
     }
   };
 
-  const createPuzzlePieces = async (imageUrl) => {
+  const createPuzzlePieces = async (imageUrl, difficulty = null) => {
     if (!sceneRef.current) return;
 
     return new Promise(async (resolve, reject) => {
@@ -648,7 +648,7 @@ const PuzzleGame = () => {
         const aspectRatio = texture.image.width / texture.image.height;
         imageAspectRatioRef.current = aspectRatio;
 
-        const gridSize = selectedDifficulty.grid;
+        const gridSize = (difficulty || selectedDifficulty).grid;
         const pieceSize = calculatePieceSize(layout);
 
         setTotalPieces(gridSize.x * gridSize.y);
@@ -1149,14 +1149,14 @@ const PuzzleGame = () => {
     if (image) {
       setLoading(true);
       try {
-        await createPuzzlePieces(image);
+        await createPuzzlePieces(image, newDifficulty);
         setGameState('playing');
         setIsTimerRunning(true);
         setCompletedPieces(0);
         setProgress(0);
         setTimeElapsed(0);
 
-        toast.success(`Difficulty changed to ${newDifficulty.name}`, {
+        toast.success(`Difficulty changed to ${newDifficulty.label}`, {
           id: 'difficulty-change',
         });
       } catch (error) {
@@ -1391,7 +1391,7 @@ const PuzzleGame = () => {
             setSelectedDifficulty(difficulty);
             setShowDifficultyModal(false);
             if (image) {
-              createPuzzlePieces(image);
+              createPuzzlePieces(image, difficulty);
             }
           }}
         />
