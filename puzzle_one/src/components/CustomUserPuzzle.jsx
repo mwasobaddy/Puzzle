@@ -437,10 +437,11 @@ const PuzzleGame = () => {
 
   // Load incomplete puzzle data if resuming from a saved game
   useEffect(() => {
-    if (!urlGameId) return;
+    if (!urlGameId || !sceneRef.current) return;
 
     const loadIncompletePuzzle = async () => {
       try {
+        setLoading(true);
         const docRef = doc(db, 'games', urlGameId);
         const docSnap = await getDoc(docRef);
 
@@ -451,17 +452,21 @@ const PuzzleGame = () => {
           setDifficulty(puzzleData.difficulty);
           setSelectedDifficulty(puzzleData.selectedDifficulty);
           setTimeElapsed(puzzleData.timeElapsed || 0);
+          timeElapsedRef.current = puzzleData.timeElapsed || 0;
           setCompletedPieces(puzzleData.completedPieces || 0);
           setTotalPieces(puzzleData.totalPieces || 0);
           setProgress(puzzleData.progress || 0);
           setGameId(urlGameId);
           incompletePuzzleDocRef.current = urlGameId;
 
-          // Set game state to playing after loading data
-          setTimeout(() => {
-            setGameState('playing');
-            setIsTimerRunning(true);
-          }, 500);
+          // Recreate the puzzle pieces
+          await createPuzzlePieces(puzzleData.image, puzzleData.selectedDifficulty);
+          
+          setLoading(false);
+          
+          // Start the game after puzzle is loaded
+          setGameState('playing');
+          setIsTimerRunning(true);
         } else {
           toast.error("Puzzle not found.");
           navigate('/');
