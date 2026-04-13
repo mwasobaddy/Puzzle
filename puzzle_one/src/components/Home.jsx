@@ -534,7 +534,7 @@ const Home = ({ user }) => {
                     className="border rounded-lg p-4 hover:shadow-md transition duration-200 transform hover:scale-105"
                   >
                     <img
-                      src={puzzle.image || resolvePuzzleImageUrl(puzzle.imageUrl)}
+                      src={resolvePuzzleImageUrl(puzzle.image || puzzle.imageUrl)}
                       alt="Puzzle thumbnail"
                       className="w-full h-32 object-contain rounded mb-2"
                       loading="lazy"
