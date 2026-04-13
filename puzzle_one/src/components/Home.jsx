@@ -284,7 +284,15 @@ const Home = ({ user }) => {
     try {
       const gameSnapshot = await getDoc(gameRef);
       if (gameSnapshot.exists()) {
-        navigate(`/puzzle/cultural/${puzzleId}`);
+        const puzzleData = gameSnapshot.data();
+        const puzzleType = puzzleData?.puzzleType || 'custom_cultural';
+        
+        // Navigate to the correct route based on puzzle type
+        if (puzzleType === 'custom_user') {
+          navigate(`/puzzle/custom/${puzzleId}`);
+        } else {
+          navigate(`/puzzle/cultural/${puzzleId}`);
+        }
       } else {
         toast.error("Puzzle not found. It may have been deleted.");
       }

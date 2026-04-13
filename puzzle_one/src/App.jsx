@@ -108,11 +108,11 @@ const App = () => {
             />
 
             <Route
-              path="/puzzle/custom"
+              path="/puzzle/custom/:gameId?"
               element={<PrivateRoute element={CustomUserPuzzle} />}
             />
             <Route
-              path="/puzzle/cultural"
+              path="/puzzle/cultural/:gameId?"
               element={<PrivateRoute element={CustomCulturalPuzzle} />}
             />
 

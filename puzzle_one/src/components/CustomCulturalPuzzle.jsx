@@ -7,13 +7,14 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { Camera, Check, Info, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play, Pause, Share2, Download, X, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth, db, database } from '../firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, setDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, update } from 'firebase/database';
 import elephant from '../assets/elephant.png';
 import pyramid from '../assets/pyramid.png';
 import african from '../assets/african.png';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
+import { useParams, useNavigate } from 'react-router-dom';
 import DifficultyBar, { difficulties } from './DifficultyBar';
 import { handlePuzzleCompletion, isPuzzleComplete } from './PuzzleCompletionHandler';
 import UpgradeModal from './UpgradeModal';
@@ -268,6 +269,8 @@ const ImageSelectionModal = ({ images, onSelect, isOpen, onClose }) => {
 };
 
 const PuzzleGame = () => {
+  const { gameId: urlGameId } = useParams();
+  const navigate = useNavigate();
   const subscription = useUserSubscription(auth.currentUser?.uid);
   const isPremium = subscription.planId === "pro" && subscription.status === "active";
   const [puzzleCount, setPuzzleCount] = useState(0);
@@ -284,7 +287,7 @@ const PuzzleGame = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [startTime, setStartTime] = useState(null);
   const [difficulty, setDifficulty] = useState(4);
-  const [gameId, setGameId] = useState(null);
+  const [gameId, setGameId] = useState(urlGameId || null);
   const [completedAchievements, setCompletedAchievements] = useState([]);
   const [showImageSelection, setShowImageSelection] = useState(true);
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties[0]);
@@ -611,6 +614,48 @@ const PuzzleGame = () => {
       piece.position.z = 0.01;
     });
   };
+
+  // Load incomplete puzzle data if resuming from a saved game
+  useEffect(() => {
+    if (!urlGameId) return;
+
+    const loadIncompletePuzzle = async () => {
+      try {
+        const docRef = doc(db, 'games', urlGameId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const puzzleData = docSnap.data();
+          
+          setImage(puzzleData.image);
+          setDifficulty(puzzleData.difficulty);
+          setSelectedDifficulty(puzzleData.selectedDifficulty);
+          setTimeElapsed(puzzleData.timeElapsed || 0);
+          setCompletedPieces(puzzleData.completedPieces || 0);
+          setTotalPieces(puzzleData.totalPieces || 0);
+          setProgress(puzzleData.progress || 0);
+          setGameId(urlGameId);
+          incompletePuzzleDocRef.current = urlGameId;
+          setShowImageSelection(false);
+
+          // Set game state to playing after loading data
+          setTimeout(() => {
+            setGameState('playing');
+            setIsTimerRunning(true);
+          }, 500);
+        } else {
+          toast.error("Puzzle not found.");
+          navigate('/');
+        }
+      } catch (error) {
+        console.error('Error loading incomplete puzzle:', error);
+        toast.error('Failed to load puzzle.');
+        navigate('/');
+      }
+    };
+
+    loadIncompletePuzzle();
+  }, [urlGameId]);
 
   useEffect(() => {
     if (!containerRef.current) return;
