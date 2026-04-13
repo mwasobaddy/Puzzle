@@ -534,12 +534,12 @@ const Home = ({ user }) => {
                     className="border rounded-lg p-4 hover:shadow-md transition duration-200 transform hover:scale-105"
                   >
                     <img
-                      src={resolvePuzzleImageUrl(puzzle.imageUrl)}
+                      src={puzzle.image || resolvePuzzleImageUrl(puzzle.imageUrl)}
                       alt="Puzzle thumbnail"
                       className="w-full h-32 object-contain rounded mb-2"
                       loading="lazy"
                     />
-                    <h3 className="font-semibold">{puzzle.difficulty} Difficulty</h3>
+                    <h3 className="font-semibold">{puzzle.selectedDifficulty?.label || puzzle.difficulty} Difficulty</h3>
                     <p className="text-sm text-gray-600">
                       Progress: {Math.round((puzzle.completedPieces / puzzle.totalPieces) * 100)}%
                     </p>
