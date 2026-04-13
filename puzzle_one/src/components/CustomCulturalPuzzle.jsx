@@ -291,6 +291,7 @@ const PuzzleGame = () => {
   const [completedAchievements, setCompletedAchievements] = useState([]);
   const [showImageSelection, setShowImageSelection] = useState(true);
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties[0]);
+  const [isSceneReady, setIsSceneReady] = useState(false);
 
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -617,7 +618,7 @@ const PuzzleGame = () => {
 
   // Load incomplete puzzle data if resuming from a saved game
   useEffect(() => {
-    if (!urlGameId || !sceneRef.current) return;
+    if (!urlGameId || !isSceneReady) return;
 
     const loadIncompletePuzzle = async () => {
       try {
@@ -667,7 +668,7 @@ const PuzzleGame = () => {
     };
 
     loadIncompletePuzzle();
-  }, [urlGameId]);
+  }, [urlGameId, isSceneReady, navigate]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -742,7 +743,10 @@ const PuzzleGame = () => {
     };
     animate();
 
+    setIsSceneReady(true);
+
     return () => {
+      setIsSceneReady(false);
       renderer.dispose();
       containerRef.current?.removeChild(renderer.domElement);
     };
