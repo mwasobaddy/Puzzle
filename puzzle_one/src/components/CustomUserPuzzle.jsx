@@ -7,7 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { Camera, Check, Info, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play, Pause, Share2, Download, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth, db, database } from '../firebase';
-import { collection, addDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc, deleteDoc } from 'firebase/firestore';
 import { ref, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip } from 'react-tooltip';
@@ -368,6 +368,7 @@ const PuzzleGame = () => {
   // Ref mirrors timeElapsed so finalizeCompletion always reads the live value
   // even when called from a stale closure inside a useEffect event handler.
   const timeElapsedRef = useRef(0);
+  const incompletePuzzleDocRef = useRef(null);
 
   const defaultCameraPosition = { x: 0, y: 0, z: 3 };
   const defaultControlsTarget = new THREE.Vector3(0, 0, 0);
@@ -464,6 +465,43 @@ const PuzzleGame = () => {
       });
     } catch (error) {
       console.error('Error updating game state:', error);
+    }
+  };
+
+  const saveIncompletePuzzle = async () => {
+    if (!gameId || !auth.currentUser || !image) return;
+
+    try {
+      const docId = `incomplete_${auth.currentUser.uid}_${gameId}`;
+      incompletePuzzleDocRef.current = docId;
+      
+      await setDoc(doc(db, 'games', docId), {
+        userId: auth.currentUser.uid,
+        state: 'in_progress',
+        image: image,
+        difficulty: difficulty,
+        selectedDifficulty: selectedDifficulty,
+        timeElapsed: timeElapsedRef.current,
+        completedPieces: completedPieces,
+        totalPieces: totalPieces,
+        progress: progress,
+        gameState: gameState,
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+        puzzleType: 'custom_user'
+      });
+    } catch (error) {
+      console.error('Error saving incomplete puzzle:', error);
+    }
+  };
+
+  const deleteIncompletePuzzle = async () => {
+    if (!incompletePuzzleDocRef.current) return;
+
+    try {
+      await deleteDoc(doc(db, 'games', incompletePuzzleDocRef.current));
+    } catch (error) {
+      console.error('Error deleting incomplete puzzle:', error);
     }
   };
 
@@ -810,6 +848,34 @@ const PuzzleGame = () => {
       }
     };
   }, [isTimerRunning]);
+
+  // Save incomplete puzzle to Firestore when game state changes
+  useEffect(() => {
+    if (gameState === 'playing' && image && auth.currentUser) {
+      // Generate gameId if not already set
+      if (!gameId) {
+        setGameId(`puzzle_${Date.now()}`);
+      }
+      
+      const saveInterval = setInterval(() => {
+        saveIncompletePuzzle();
+      }, 5000); // Save every 5 seconds
+
+      // Initial save
+      saveIncompletePuzzle();
+
+      return () => clearInterval(saveInterval);
+    }
+  }, [gameState, image, auth.currentUser, gameId, difficulty, selectedDifficulty, completedPieces, totalPieces, progress]);
+
+  // Clean up incomplete puzzle when component unmounts or puzzle is completed
+  useEffect(() => {
+    return () => {
+      if (gameState === 'completed' || gameState === 'initial') {
+        deleteIncompletePuzzle();
+      }
+    };
+  }, [gameState]);
 
   useEffect(() => {
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return;
@@ -1179,6 +1245,9 @@ const PuzzleGame = () => {
       clearInterval(timerRef.current);
     }
 
+    // Delete incomplete puzzle from Firestore
+    await deleteIncompletePuzzle();
+
     const completionData = {
       puzzleId: `custom_${Date.now()}`,
       userId: auth.currentUser.uid,
@@ -1207,6 +1276,7 @@ const PuzzleGame = () => {
         });
       }
 
+      setGameState('completed');
       setShowShareModal(true);
       toast.success('Puzzle completed!');
       soundRef.current?.play('complete');
