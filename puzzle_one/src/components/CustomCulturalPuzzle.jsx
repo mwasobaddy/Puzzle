@@ -23,10 +23,10 @@ import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 import { ParticleSystem } from '../utils/ParticleSystem';
 
 const DIFFICULTY_SETTINGS = {
-  easy: { grid: { x: 4, y: 3 }, snapDistance: 0.4, rotationEnabled: false },
-  medium: { grid: { x: 5, y: 4 }, snapDistance: 0.3, rotationEnabled: true },
-  hard: { grid: { x: 6, y: 5 }, snapDistance: 0.2, rotationEnabled: true },
-  expert: { grid: { x: 8, y: 6 }, snapDistance: 0.15, rotationEnabled: true }
+  easy: { grid: { x: 3, y: 2 }, snapDistance: 0.4, rotationEnabled: false },
+  medium: { grid: { x: 4, y: 3 }, snapDistance: 0.3, rotationEnabled: true },
+  hard: { grid: { x: 6, y: 4 }, snapDistance: 0.2, rotationEnabled: true },
+  expert: { grid: { x: 6, y: 5 }, snapDistance: 0.15, rotationEnabled: true }
 };
 
 const ACHIEVEMENTS = [
