@@ -386,6 +386,40 @@ const PuzzleGame = () => {
     };
   };
 
+  const getPlacedGridPositions = () => (
+    puzzlePiecesRef.current
+      .filter(piece => piece.userData?.isPlaced)
+      .map(piece => piece.userData.gridPosition)
+  );
+
+  const applyPlacedGridPositions = (placedPositions = []) => {
+    if (!placedPositions.length) return;
+
+    const placedSet = new Set(placedPositions.map(pos => `${pos.x},${pos.y}`));
+    let placedCount = 0;
+
+    puzzlePiecesRef.current.forEach(piece => {
+      const grid = piece.userData?.gridPosition;
+      if (!grid || !placedSet.has(`${grid.x},${grid.y}`)) return;
+
+      piece.position.copy(piece.userData.originalPosition);
+      piece.rotation.set(0, 0, 0);
+      piece.userData.isPlaced = true;
+      placedCount += 1;
+
+      if (piece.material?.uniforms) {
+        piece.material.uniforms.correctPosition.value = 1.0;
+        piece.material.uniforms.selected.value = 0.0;
+      }
+    });
+
+    if (placedCount > 0) {
+      const total = puzzlePiecesRef.current.length || 1;
+      setCompletedPieces(placedCount);
+      setProgress((placedCount / total) * 100);
+    }
+  };
+
   const handlePieceSnap = (piece, particleSystem) => {
     const originalPos = piece.userData.originalPosition;
     const duration = 0.2;
@@ -469,6 +503,10 @@ const PuzzleGame = () => {
 
           // Recreate the puzzle pieces
           await createPuzzlePieces(savedImage, puzzleData.selectedDifficulty);
+
+          if (Array.isArray(puzzleData.placedPieces)) {
+            applyPlacedGridPositions(puzzleData.placedPieces);
+          }
           
           setLoading(false);
           
@@ -536,6 +574,7 @@ const PuzzleGame = () => {
         image: image,
         difficulty: difficulty,
         selectedDifficulty: selectedDifficulty,
+        placedPieces: getPlacedGridPositions(),
         timeElapsed: timeElapsedRef.current,
         completedPieces: completedPieces,
         totalPieces: totalPieces,
