@@ -359,7 +359,10 @@ const PuzzleGame = () => {
     if (!gameId || !auth.currentUser || !image) return;
 
     try {
-      const docId = `incomplete_${auth.currentUser.uid}_${gameId}`;
+      const incompletePrefix = `incomplete_${auth.currentUser.uid}_`;
+      const docId = gameId.startsWith(incompletePrefix)
+        ? gameId
+        : `${incompletePrefix}${gameId}`;
       incompletePuzzleDocRef.current = docId;
 
       await setDoc(doc(db, 'games', docId), {
