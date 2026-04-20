@@ -157,16 +157,9 @@ const UserStats = ({ userId }) => {
     hasMore: true
   });
   const handleContinuePuzzle = useCallback((puzzle) => {
-    const normalizePuzzleId = (rawId) => {
-      let normalized = rawId.replace(/^(?:rtdb_|firestore_)+/, '');
-      const incompletePrefix = /^incomplete_[^_]+_/;
-      while (incompletePrefix.test(normalized) && incompletePrefix.test(normalized.replace(incompletePrefix, ''))) {
-        normalized = normalized.replace(incompletePrefix, '');
-      }
-      return normalized;
-    };
-
-    const puzzleId = normalizePuzzleId(puzzle.id);
+    const puzzleId = puzzle.resumeId || puzzle.id
+      .replace(/^rtdb_/, '')
+      .replace(/^firestore_/, '');
     switch (puzzle.puzzleType) {
       case 'custom_user':
         return navigate(`/puzzle/custom/${puzzleId}`);
@@ -280,6 +273,7 @@ const UserStats = ({ userId }) => {
               .filter(([, game]) => game.userId === userId && !game.isCompleted)
               .map(([key, game]) => ({
                 id: `rtdb_${key}`,
+                resumeId: key,
                 name: `${game.difficulty}x${game.difficulty} Puzzle`,
                 currentTime: game.currentTime || 0,
                 difficulty: game.difficulty,
@@ -299,6 +293,7 @@ const UserStats = ({ userId }) => {
 
               return {
                 id: `firestore_${docSnap.id}`,
+                resumeId: docSnap.id,
                 name: game?.name || `${difficulty || '--'}x${difficulty || '--'} Puzzle`,
                 currentTime: game.timeElapsed || 0,
                 difficulty,
