@@ -157,7 +157,9 @@ const UserStats = ({ userId }) => {
     hasMore: true
   });
   const handleContinuePuzzle = useCallback((puzzle) => {
-    const puzzleId = puzzle.id.startsWith('rtdb_') ? puzzle.id.replace('rtdb_', '') : puzzle.id;
+    const puzzleId = puzzle.id
+      .replace(/^rtdb_/, '')
+      .replace(/^firestore_/, '');
     switch (puzzle.puzzleType) {
       case 'custom_user':
         return navigate(`/puzzle/custom/${puzzleId}`);
