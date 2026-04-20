@@ -559,36 +559,6 @@ const Home = ({ user }) => {
           </div>
         </div>
 
-
-        <div className="bg-white rounded-lg shadow-lg transform transition-transform hover:scale-102 hover:shadow-2xl mt-5">
-          <div className="p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Puzzles</h2>
-            {recentPuzzles.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {recentPuzzles.map(puzzle => (
-                  <div
-                    key={puzzle.id}
-                    className="border rounded-lg p-4 hover:shadow-md"
-                  >
-                    <img
-                      src={resolvePuzzleImageUrl(puzzle.thumbnail)}
-                      alt="Puzzle thumbnail"
-                      className="w-full h-32 object-contain rounded mb-2"
-                      loading="lazy"
-                    />
-                    <h3 className="font-semibold">{puzzle.name || 'Puzzle'}</h3>
-                    <p className="text-sm text-gray-600">
-                      Completed in {formatTime(puzzle.completionTime)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-600">No puzzles completed yet. Start solving!</p>
-            )}
-          </div>
-        </div>
-
         {!isPremium && (
           <div className="bg-white rounded-lg shadow-lg transform transition-transform hover:scale-102 hover:shadow-2xl mt-8 premium-section">
             <div className="p-6">
