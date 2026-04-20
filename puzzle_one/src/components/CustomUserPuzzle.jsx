@@ -1,18 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import  { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
-import { Camera, Check, Info, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play, Pause, Share2, Download, RefreshCw } from 'lucide-react';
+import { Camera, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play, Pause, Download, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth, db, database } from '../firebase';
-import { collection, addDoc, getDocs, query, where, serverTimestamp, setDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, serverTimestamp, setDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Tooltip } from 'react-tooltip';
 import DifficultyBar, { difficulties } from './DifficultyBar';
-import { handlePuzzleCompletion, isPuzzleComplete } from './PuzzleCompletionHandler';
+import { handlePuzzleCompletion } from './PuzzleCompletionHandler';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useUserSubscription } from '../hooks/useUserSubscription';
 import { toast } from 'react-hot-toast';
@@ -20,12 +19,6 @@ import UpgradeModal from './UpgradeModal';
 import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 import { ParticleSystem } from '../utils/ParticleSystem';
 
-const DIFFICULTY_SETTINGS = {
-  easy: { grid: { x: 3, y: 2 }, snapDistance: 0.4, rotationEnabled: false },
-  medium: { grid: { x: 4, y: 3 }, snapDistance: 0.3, rotationEnabled: true },
-  hard: { grid: { x: 6, y: 4 }, snapDistance: 0.2, rotationEnabled: true },
-  expert: { grid: { x: 6, y: 5 }, snapDistance: 0.15, rotationEnabled: true }
-};
 
 const ACHIEVEMENTS = [
   { id: 'speed_demon', name: 'Speed Demon', description: 'Complete puzzle under 2 minutes', icon: '⚡' },
@@ -188,89 +181,6 @@ const puzzlePieceShader = {
   `
 };
 
-const handlePieceSnap = (piece, particleSystem) => {
-  const originalPos = piece.userData.originalPosition;
-  const duration = 0.2;
-  const startPos = piece.position.clone();
-  const startRot = piece.rotation.clone();
-  const startTime = Date.now();
-
-  const animate = () => {
-    const progress = Math.min((Date.now() - startTime) / (duration * 1000), 1);
-    const easeProgress = 1 - Math.pow(1 - progress, 4);
-
-    piece.position.lerpVectors(startPos, originalPos, easeProgress);
-    piece.rotation.z = THREE.MathUtils.lerp(startRot.z, 0, easeProgress);
-
-    if (progress < 1) {
-      requestAnimationFrame(animate);
-    } else {
-      piece.position.copy(originalPos);
-      piece.rotation.set(0, 0, 0);
-      if (particleSystem) {
-        particleSystem.emit(piece.position, 30);
-      }
-      soundRef.current?.play('place');
-    }
-  };
-
-  animate();
-};
-
-const createPlacementGuides = (gridSize, pieceSize) => {
-  guideOutlinesRef.current.forEach(guide => sceneRef.current.remove(guide));
-  guideOutlinesRef.current = [];
-
-  const gridWidth = gridSize.x * pieceSize.x;
-  const gridHeight = gridSize.y * pieceSize.y;
-
-  const gridBackground = new THREE.Mesh(
-    new THREE.PlaneGeometry(gridWidth + 0.1, gridHeight + 0.1),
-    new THREE.MeshBasicMaterial({
-      color: GRID_STYLE.secondaryColor,
-      transparent: true,
-      opacity: 0.2
-    })
-  );
-  gridBackground.position.z = -0.02;
-  sceneRef.current.add(gridBackground);
-  guideOutlinesRef.current.push(gridBackground);
-
-  for (let y = 0; y < gridSize.y; y++) {
-    for (let x = 0; x < gridSize.x; x++) {
-      const isAlternate = (x + y) % 2 === 0;
-      const cellGeometry = new THREE.PlaneGeometry(pieceSize.x * 0.98, pieceSize.y * 0.98);
-      const cellMaterial = new THREE.MeshBasicMaterial({
-        color: isAlternate ? GRID_STYLE.primaryColor : GRID_STYLE.secondaryColor,
-        transparent: true,
-        opacity: 0.15
-      });
-      const cell = new THREE.Mesh(cellGeometry, cellMaterial);
-
-      cell.position.x = (x - (gridSize.x - 1) / 2) * pieceSize.x;
-      cell.position.y = (y - (gridSize.y - 1) / 2) * pieceSize.y;
-      cell.position.z = -0.015;
-
-      sceneRef.current.add(cell);
-      guideOutlinesRef.current.push(cell);
-
-      const outlineGeometry = new THREE.EdgesGeometry(cellGeometry);
-      const outlineMaterial = new THREE.LineBasicMaterial({
-        color: GRID_STYLE.primaryColor,
-        transparent: true,
-        opacity: GRID_STYLE.opacity,
-        linewidth: GRID_STYLE.lineWidth
-      });
-      const outline = new THREE.LineSegments(outlineGeometry, outlineMaterial);
-      outline.position.copy(cell.position);
-      outline.position.z = -0.01;
-
-      sceneRef.current.add(outline);
-      guideOutlinesRef.current.push(outline);
-    }
-  }
-};
-
 const arrangePiecesInContainer = (pieces, container, pieceSize) => {
   const cols = Math.floor(container.dimensions.width / (pieceSize.x * 1.2));
   const rows = Math.ceil(pieces.length / cols);
@@ -289,7 +199,6 @@ const arrangePiecesInContainer = (pieces, container, pieceSize) => {
 
 const calculateResponsiveLayout = (container) => {
   const width = container.clientWidth;
-  const height = container.clientHeight;
   const isMobile = width < 768;
 
   return {
@@ -343,11 +252,8 @@ const PuzzleGame = () => {
   const [gameState, setGameState] = useState('initial');
   const [showThumbnail, setShowThumbnail] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showDifficultyModal, setShowDifficultyModal] = useState(false);
-  const [startTime, setStartTime] = useState(null);
   const [difficulty, setDifficulty] = useState('easy');
   const [gameId, setGameId] = useState(urlGameId || null);
-  const [completedAchievements, setCompletedAchievements] = useState([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties[0]);
   const [layout, setLayout] = useState(null);
   const [isSceneReady, setIsSceneReady] = useState(false);
@@ -534,19 +440,6 @@ const PuzzleGame = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const startGame = async () => {
-    if (!image) {
-      alert('Please upload an image first');
-      return;
-    }
-
-    await initializeAudio();
-
-    setGameState('playing');
-    setIsTimerRunning(true);
-    setStartTime(Date.now());
-    completionHandledRef.current = false;
-  };
 
   const updateGameState = async (newState) => {
     if (!gameId) return;
@@ -751,6 +644,7 @@ const PuzzleGame = () => {
   const createPuzzlePieces = async (imageUrl, difficulty = null) => {
     if (!sceneRef.current) return;
 
+    // eslint-disable-next-line no-async-promise-executor
     return new Promise(async (resolve, reject) => {
       try {
         puzzlePiecesRef.current.forEach(piece => {
@@ -1349,6 +1243,7 @@ const PuzzleGame = () => {
       puzzleId: `custom_${Date.now()}`,
       userId: auth.currentUser.uid,
       playerName: auth.currentUser.email || 'Anonymous',
+      // eslint-disable-next-line no-undef
       startTime: startTime,
       difficulty: selectedDifficulty.grid.x,
       name: `${selectedDifficulty.label} Custom Puzzle`,
@@ -1363,6 +1258,7 @@ const PuzzleGame = () => {
     try {
       // Show completion UI immediately — don't block on Firestore writes
       const achievements = checkAchievements();
+      // eslint-disable-next-line no-undef
       setCompletedAchievements(achievements);
 
       if (gameId) {
@@ -1435,23 +1331,6 @@ const PuzzleGame = () => {
     }
   };
 
-  const setupMouseInteraction = () => {
-    if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return;
-
-    const handlePieceInteraction = async (event, piece) => {
-      if (!piece || piece.userData.isPlaced) return;
-
-      await initializeAudio();
-
-      if (piece.material.uniforms) {
-        piece.material.uniforms.selected.value = 1.0;
-      }
-
-      soundRef.current?.play('pickup');
-    };
-
-  };
-
   const checkAchievements = () => {
     const achievements = [];
 
@@ -1468,47 +1347,6 @@ const PuzzleGame = () => {
     }
 
     return achievements;
-  };
-
-  const handlePuzzleCompletionCustom = async () => {
-    if (!auth.currentUser) return;
-
-    const achievements = checkAchievements();
-
-    try {
-      await addDoc(collection(db, 'completed_puzzles'), {
-        userId: auth.currentUser.uid,
-        puzzleId: gameId,
-        timeElapsed,
-        difficulty,
-        completedAt: serverTimestamp(),
-        achievements: achievements.map(a => a.id)
-      });
-
-      soundRef.current?.play('complete');
-
-      setCompletedAchievements(achievements);
-
-    } catch (error) {
-      console.error('Error saving completion:', error);
-    }
-  };
-
-  const initializeGameState = async () => {
-    if (!auth.currentUser) return;
-
-    const gameRef = ref(database, `games/${gameId}`);
-
-    try {
-      await update(gameRef, {
-        createdAt: serverTimestamp(),
-        userId: auth.currentUser.uid,
-        difficulty,
-        state: 'initial'
-      });
-    } catch (error) {
-      console.error('Error initializing game:', error);
-    }
   };
 
   const handlePieceComplete = async (piece) => {
@@ -1547,24 +1385,6 @@ const PuzzleGame = () => {
 
     animate();
   };
-
-  const DifficultyModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl max-w-4xl w-full p-6">
-        <h2 className="text-2xl font-bold text-white mb-4">Select Difficulty</h2>
-        <DifficultySelector
-          selectedDifficulty={selectedDifficulty}
-          onSelect={(difficulty) => {
-            setSelectedDifficulty(difficulty);
-            setShowDifficultyModal(false);
-            if (image) {
-              createPuzzlePieces(image, difficulty);
-            }
-          }}
-        />
-      </div>
-    </div>
-  );
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -1739,6 +1559,7 @@ const PuzzleGame = () => {
   );
 };
 
+// eslint-disable-next-line react/prop-types
 const ControlButton = ({ icon, onClick, tooltip, active = false }) => (
   <button
     onClick={onClick}
