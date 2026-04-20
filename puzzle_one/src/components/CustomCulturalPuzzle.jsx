@@ -1370,7 +1370,7 @@ const PuzzleGame = () => {
     if (image) {
       setLoading(true);
       try {
-        await createPuzzlePieces(image);
+        await createPuzzlePieces(image, newDifficulty);
         setGameState('playing');
         setIsTimerRunning(true);
         setCompletedPieces(0);
