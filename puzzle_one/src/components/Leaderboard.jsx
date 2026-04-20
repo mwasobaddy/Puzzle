@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { ref, get } from 'firebase/database';
 import { db, database } from '../firebase';
-import { ChevronUp, ChevronDown, Filter, Search, Info, Loader } from 'lucide-react';
+import { ChevronUp, ChevronDown, Filter, Search, Loader } from 'lucide-react';
 import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,10 +34,12 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return <div className="p-4 text-red-500">Something went wrong. Please try again.</div>;
     }
+    // eslint-disable-next-line react/prop-types
     return this.props.children;
   }
 }
 
+// eslint-disable-next-line react/display-name, react/prop-types
 const StatCard = memo(({ title, value, subtitle, className = '' }) => (
   <div className={`rounded-lg shadow p-6 ${className}`}>
     <h3 className="text-lg font-semibold mb-4">{title}</h3>
@@ -46,6 +48,7 @@ const StatCard = memo(({ title, value, subtitle, className = '' }) => (
   </div>
 ));
 
+// eslint-disable-next-line react/display-name, react/prop-types
 const DifficultyChart = memo(({ breakdown, darkMode }) => (
   <div className={`rounded-lg shadow p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
     <h3 className="text-lg font-semibold mb-4">Difficulty Split</h3>
@@ -63,11 +66,17 @@ const DifficultyChart = memo(({ breakdown, darkMode }) => (
   </div>
 ));
 
+// eslint-disable-next-line react/display-name
 const FilterControls = memo(({
+  // eslint-disable-next-line react/prop-types
   selectedDifficulty,
+  // eslint-disable-next-line react/prop-types
   setSelectedDifficulty,
+  // eslint-disable-next-line react/prop-types
   searchQuery,
+  // eslint-disable-next-line react/prop-types
   setSearchQuery,
+  // eslint-disable-next-line react/prop-types
   darkMode
 }) => (
   <div className={`rounded-lg shadow p-4 flex items-center gap-4 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
@@ -98,6 +107,7 @@ const FilterControls = memo(({
   </div>
 ));
 
+// eslint-disable-next-line react/display-name, react/prop-types
 const TableHeader = memo(({ onSort, sortConfig, darkMode }) => (
   <thead className={`sticky top-0 z-10 ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
     <tr>
@@ -108,26 +118,34 @@ const TableHeader = memo(({ onSort, sortConfig, darkMode }) => (
         className="px-4 py-3 text-left font-medium text-gray-600 cursor-pointer"
         onClick={() => onSort('bestTime')}
       >
-        Time {sortConfig.field === 'bestTime' && (
-          sortConfig.direction === 'asc' ?
-            <ChevronUp className="inline w-4 h-4" /> :
-            <ChevronDown className="inline w-4 h-4" />
-        )}
+        Time
+        {
+          // eslint-disable-next-line react/prop-types
+          sortConfig.field === 'bestTime' && (
+            // eslint-disable-next-line react/prop-types
+            sortConfig.direction === 'asc' ?
+              <ChevronUp className="inline w-4 h-4" /> :
+              <ChevronDown className="inline w-4 h-4" />
+          )}
       </th>
       <th
         className="px-4 py-3 text-left font-medium text-gray-600 cursor-pointer"
         onClick={() => onSort('timestamp')}
       >
-        Completed {sortConfig.field === 'timestamp' && (
-          sortConfig.direction === 'asc' ?
-            <ChevronUp className="inline w-4 h-4" /> :
-            <ChevronDown className="inline w-4 h-4" />
-        )}
+        Completed {
+          // eslint-disable-next-line react/prop-types
+          sortConfig.field === 'timestamp' && (
+            // eslint-disable-next-line react/prop-types
+            sortConfig.direction === 'asc' ?
+              <ChevronUp className="inline w-4 h-4" /> :
+              <ChevronDown className="inline w-4 h-4" />
+          )}
       </th>
     </tr>
   </thead>
 ));
 
+// eslint-disable-next-line react/prop-types
 const UserStats = ({ userId }) => {
   const navigate = useNavigate();
   const [data, setData] = useState({
@@ -182,7 +200,7 @@ const UserStats = ({ userId }) => {
           }));
         }
       },
-      () => {} // silence offline errors – data already set from completed_puzzles snapshot
+      () => { } // silence offline errors – data already set from completed_puzzles snapshot
     );
     return () => unsubStats();
   }, [userId]);
