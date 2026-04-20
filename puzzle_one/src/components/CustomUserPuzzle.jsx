@@ -1360,7 +1360,7 @@ const PuzzleGame = () => {
     }
   };
 
-  const checkAchievements = () => {
+  function checkAchievements() {
     const achievements = [];
 
     if (timeElapsed < 120) {
@@ -1376,7 +1376,7 @@ const PuzzleGame = () => {
     }
 
     return achievements;
-  };
+  }
 
   const handlePieceComplete = async (piece) => {
     if (!piece) return;

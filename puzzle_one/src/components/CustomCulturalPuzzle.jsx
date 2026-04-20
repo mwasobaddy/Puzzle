@@ -1188,7 +1188,8 @@ const PuzzleGame = () => {
     }
   };
 
-  const checkAchievements = () => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  function checkAchievements() {
     const achievements = [];
 
     if (timeElapsed < 120) {
@@ -1204,7 +1205,7 @@ const PuzzleGame = () => {
     }
 
     return achievements;
-  };
+  }
 
   const handlePieceComplete = async (piece) => {
     if (!piece) return;
