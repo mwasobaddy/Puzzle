@@ -157,9 +157,16 @@ const UserStats = ({ userId }) => {
     hasMore: true
   });
   const handleContinuePuzzle = useCallback((puzzle) => {
-    const puzzleId = puzzle.id
-      .replace(/^rtdb_/, '')
-      .replace(/^firestore_/, '');
+    const normalizePuzzleId = (rawId) => {
+      let normalized = rawId.replace(/^(?:rtdb_|firestore_)+/, '');
+      const incompletePrefix = /^incomplete_[^_]+_/;
+      while (incompletePrefix.test(normalized) && incompletePrefix.test(normalized.replace(incompletePrefix, ''))) {
+        normalized = normalized.replace(incompletePrefix, '');
+      }
+      return normalized;
+    };
+
+    const puzzleId = normalizePuzzleId(puzzle.id);
     switch (puzzle.puzzleType) {
       case 'custom_user':
         return navigate(`/puzzle/custom/${puzzleId}`);
