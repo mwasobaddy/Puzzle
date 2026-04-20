@@ -15,6 +15,7 @@ import { ref, get } from 'firebase/database';
 import { db, database } from '../firebase';
 import { ChevronUp, ChevronDown, Filter, Search, Info, Loader } from 'lucide-react';
 import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
+import { useNavigate } from 'react-router-dom';
 
 const ITEMS_PER_PAGE = 20;
 const cache = new Map();
@@ -128,6 +129,7 @@ const TableHeader = memo(({ onSort, sortConfig, darkMode }) => (
 ));
 
 const UserStats = ({ userId }) => {
+  const navigate = useNavigate();
   const [data, setData] = useState({
     completedPuzzles: [],
     currentPuzzles: [],
@@ -136,6 +138,19 @@ const UserStats = ({ userId }) => {
     lastDoc: null,
     hasMore: true
   });
+  const handleContinuePuzzle = useCallback((puzzle) => {
+    const puzzleId = puzzle.id.startsWith('rtdb_') ? puzzle.id.replace('rtdb_', '') : puzzle.id;
+    switch (puzzle.puzzleType) {
+      case 'custom_user':
+        return navigate(`/puzzle/custom/${puzzleId}`);
+      case 'custom_cultural':
+        return navigate(`/puzzle/cultural/${puzzleId}`);
+      case 'multiplayer':
+      default:
+        return navigate(`/puzzle/multiplayer/${puzzleId}`);
+    }
+  }, [navigate]);
+
   const [summaryStats, setSummaryStats] = useState({
     totalCompleted: 0,
     bestTime: null,
@@ -203,29 +218,78 @@ const UserStats = ({ userId }) => {
 
           // Fetch secondary data with individual fallbacks so an offline error
           // on either call doesn't abort rendering the puzzle list.
-          const [gamesSnap, userStatsSnap] = await Promise.all([
+          const firestoreCurrentQuery = query(
+            collection(db, 'games'),
+            where('userId', '==', userId),
+            where('state', '==', 'in_progress')
+          );
+
+          const [gamesSnap, userStatsSnap, firestoreCurrentSnap] = await Promise.all([
             get(ref(database, 'games')).catch(() => null),
-            getDoc(doc(db, 'user_stats', userId)).catch(() => null)
+            getDoc(doc(db, 'user_stats', userId)).catch(() => null),
+            getDocs(firestoreCurrentQuery).catch(() => null)
           ]);
 
-          let currentResults = [];
+          const parseDifficulty = (game) => {
+            const selectedGridX = game?.selectedDifficulty?.grid?.x;
+            if (Number.isFinite(selectedGridX)) return selectedGridX;
+
+            if (Number.isFinite(game?.difficulty)) return game.difficulty;
+
+            if (typeof game?.difficulty === 'string') {
+              const parsed = Number.parseInt(game.difficulty, 10);
+              if (Number.isFinite(parsed)) return parsed;
+
+              const map = { easy: 3, medium: 4, hard: 6, expert: 6 };
+              return map[game.difficulty] ?? null;
+            }
+
+            return null;
+          };
+
+          const currentResults = [];
           if (gamesSnap?.exists()) {
-            currentResults = Object.entries(gamesSnap.val())
+            const rtdbCurrentResults = Object.entries(gamesSnap.val())
               .filter(([, game]) => game.userId === userId && !game.isCompleted)
               .map(([key, game]) => ({
-                id: key,
+                id: `rtdb_${key}`,
                 name: `${game.difficulty}x${game.difficulty} Puzzle`,
                 currentTime: game.currentTime || 0,
                 difficulty: game.difficulty,
                 thumbnail: game.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2NjYyIvPjwvc3ZnPg==',
-                startedAt: new Date(game.startTime).toISOString()
+                startedAt: new Date(game.startTime || Date.now()).toISOString(),
+                status: game.status || 'incomplete',
+                puzzleType: game.puzzleType || 'multiplayer'
               }));
+            currentResults.push(...rtdbCurrentResults);
+          }
+
+          if (firestoreCurrentSnap) {
+            const firestoreCurrentResults = firestoreCurrentSnap.docs.map((docSnap) => {
+              const game = docSnap.data();
+              const difficulty = parseDifficulty(game);
+              const startedAt = game.createdAt?.toDate?.() || game.lastUpdated?.toDate?.() || new Date();
+
+              return {
+                id: `firestore_${docSnap.id}`,
+                name: game?.name || `${difficulty || '--'}x${difficulty || '--'} Puzzle`,
+                currentTime: game.timeElapsed || 0,
+                difficulty,
+                thumbnail: game.image || game.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2NjYyIvPjwvc3ZnPg==',
+                startedAt: startedAt.toISOString(),
+                status: game.status || 'incomplete',
+                puzzleType: game.puzzleType || 'custom_cultural'
+              };
+            });
+
+            currentResults.push(...firestoreCurrentResults);
           }
 
           const difficultyBreakdown = completedResults.reduce((acc, puzzle) => {
             acc[puzzle.difficulty] = (acc[puzzle.difficulty] || 0) + 1;
             return acc;
           }, {});
+
           const totalTime = completedResults.reduce((sum, puzzle) => sum + (puzzle.bestTime || 0), 0);
           const averageTime = completedResults.length ? Math.round(totalTime / completedResults.length) : null;
           const completionRate = currentResults.length + completedResults.length > 0
@@ -520,6 +584,8 @@ const UserStats = ({ userId }) => {
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Difficulty</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Current Time</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Started</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -535,11 +601,25 @@ const UserStats = ({ userId }) => {
                       <td className="px-4 py-3">
                         {new Date(puzzle.startedAt).toLocaleDateString()}
                       </td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+                          {(puzzle.status || 'incomplete').replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => handleContinuePuzzle(puzzle)}
+                          className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                        >
+                          Continue
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {data.currentPuzzles.length === 0 && (
                     <tr>
-                      <td colSpan="4" className="px-4 py-3 text-center text-gray-500">
+                      <td colSpan="6" className="px-4 py-3 text-center text-gray-500">
                         No puzzles in progress
                       </td>
                     </tr>
