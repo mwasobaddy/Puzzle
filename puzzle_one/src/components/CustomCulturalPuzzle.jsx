@@ -389,6 +389,7 @@ const PuzzleGame = () => {
       await setDoc(doc(db, 'games', docId), {
         userId: auth.currentUser.uid,
         state: 'in_progress',
+        status: 'incomplete',
         image: image,
         difficulty: difficulty,
         selectedDifficulty: selectedDifficulty,
