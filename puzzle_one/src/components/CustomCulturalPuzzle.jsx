@@ -273,6 +273,7 @@ const PuzzleGame = () => {
   const [totalPieces, setTotalPieces] = useState(0);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [startTime, setStartTime] = useState(null);
   const [gameState, setGameState] = useState('initial');
   const [showThumbnail, setShowThumbnail] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -281,6 +282,7 @@ const PuzzleGame = () => {
   const [showImageSelection, setShowImageSelection] = useState(true);
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties[0]);
   const [isSceneReady, setIsSceneReady] = useState(false);
+  const startTimeRef = useRef(null);
 
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -372,6 +374,7 @@ const PuzzleGame = () => {
         image: image,
         difficulty: difficulty,
         selectedDifficulty: selectedDifficulty,
+        startTime: startTime || Date.now(),
         placedPieces: getPlacedGridPositions(),
         timeElapsed: timeElapsedRef.current,
         completedPieces: completedPieces,
@@ -683,6 +686,9 @@ const PuzzleGame = () => {
           setCompletedPieces(puzzleData.completedPieces || 0);
           setTotalPieces(puzzleData.totalPieces || 0);
           setProgress(puzzleData.progress || 0);
+          const loadedStartTime = puzzleData.startTime || Date.now();
+          setStartTime(loadedStartTime);
+          startTimeRef.current = loadedStartTime;
           setGameId(resolvedGameId);
           incompletePuzzleDocRef.current = resolvedGameId;
           setShowImageSelection(false);
@@ -1420,6 +1426,9 @@ const PuzzleGame = () => {
         onSelect={(img) => {
           setImage(img.src);
           createPuzzlePieces(img.src).then(() => {
+            const started = Date.now();
+            setStartTime(started);
+            startTimeRef.current = started;
             setLoading(false);
             setGameState('playing');
             setIsTimerRunning(true);

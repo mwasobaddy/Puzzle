@@ -289,7 +289,9 @@ const UserStats = ({ userId }) => {
             const firestoreCurrentResults = firestoreCurrentSnap.docs.map((docSnap) => {
               const game = docSnap.data();
               const difficulty = parseDifficulty(game);
-              const startedAt = game.createdAt?.toDate?.() || game.lastUpdated?.toDate?.() || new Date();
+              const startedAt = game.startTime
+              ? new Date(game.startTime)
+              : game.createdAt?.toDate?.() || game.lastUpdated?.toDate?.() || new Date();
 
               return {
                 id: `firestore_${docSnap.id}`,

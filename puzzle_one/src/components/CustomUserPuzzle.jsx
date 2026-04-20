@@ -249,6 +249,7 @@ const PuzzleGame = () => {
   const [totalPieces, setTotalPieces] = useState(0);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [startTime, setStartTime] = useState(null);
   const [gameState, setGameState] = useState('initial');
   const [showThumbnail, setShowThumbnail] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -426,6 +427,9 @@ const PuzzleGame = () => {
           setCompletedPieces(puzzleData.completedPieces || 0);
           setTotalPieces(puzzleData.totalPieces || 0);
           setProgress(puzzleData.progress || 0);
+          const loadedStartTime = puzzleData.startTime || Date.now();
+          setStartTime(loadedStartTime);
+          startTimeRef.current = loadedStartTime;
           setGameId(resolvedGameId);
           incompletePuzzleDocRef.current = resolvedGameId;
 
@@ -496,6 +500,7 @@ const PuzzleGame = () => {
         image: image,
         difficulty: difficulty,
         selectedDifficulty: selectedDifficulty,
+        startTime: startTime || Date.now(),
         placedPieces: getPlacedGridPositions(),
         timeElapsed: timeElapsedRef.current,
         completedPieces: completedPieces,
@@ -1083,6 +1088,9 @@ const PuzzleGame = () => {
     reader.onload = (e) => {
       setImage(e.target.result);
       createPuzzlePieces(e.target.result).then(() => {
+        const started = Date.now();
+        setStartTime(started);
+        startTimeRef.current = started;
         setLoading(false);
         setGameState("playing");
         setIsTimerRunning(true);
@@ -1236,6 +1244,9 @@ const PuzzleGame = () => {
       setLoading(true);
       try {
         await createPuzzlePieces(image, newDifficulty);
+        const started = Date.now();
+        setStartTime(started);
+        startTimeRef.current = started;
         setGameState('playing');
         setIsTimerRunning(true);
         setCompletedPieces(0);
