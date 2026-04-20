@@ -7,7 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play, Pause, Download, X, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth, db, database } from '../firebase';
-import { serverTimestamp, setDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, serverTimestamp, setDoc, doc, deleteDoc, getDoc, where } from 'firebase/firestore';
 import { ref, update } from 'firebase/database';
 import elephant from '../assets/elephant.png';
 import pyramid from '../assets/pyramid.png';
@@ -639,8 +639,30 @@ const PuzzleGame = () => {
     const loadIncompletePuzzle = async () => {
       try {
         setLoading(true);
-        const docRef = doc(db, 'games', urlGameId);
-        const docSnap = await getDoc(docRef);
+        let resolvedGameId = urlGameId;
+        let docSnap = await getDoc(doc(db, 'games', resolvedGameId));
+
+        // Support legacy nested incomplete IDs by resolving to the latest matching doc.
+        if (!docSnap.exists() && auth.currentUser && urlGameId.startsWith('incomplete_')) {
+          const q = query(
+            collection(db, 'games'),
+            where('userId', '==', auth.currentUser.uid),
+            where('state', '==', 'in_progress')
+          );
+          const candidateSnap = await getDocs(q);
+          const suffix = `_${urlGameId}`;
+          const candidates = candidateSnap.docs.filter((d) => d.id === urlGameId || d.id.endsWith(suffix));
+
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => {
+              const aTs = a.data().lastUpdated?.toMillis?.() || a.data().createdAt?.toMillis?.() || 0;
+              const bTs = b.data().lastUpdated?.toMillis?.() || b.data().createdAt?.toMillis?.() || 0;
+              return bTs - aTs;
+            });
+            resolvedGameId = candidates[0].id;
+            docSnap = candidates[0];
+          }
+        }
 
         if (docSnap.exists()) {
           const puzzleData = docSnap.data();
@@ -661,9 +683,13 @@ const PuzzleGame = () => {
           setCompletedPieces(puzzleData.completedPieces || 0);
           setTotalPieces(puzzleData.totalPieces || 0);
           setProgress(puzzleData.progress || 0);
-          setGameId(urlGameId);
-          incompletePuzzleDocRef.current = urlGameId;
+          setGameId(resolvedGameId);
+          incompletePuzzleDocRef.current = resolvedGameId;
           setShowImageSelection(false);
+
+          if (resolvedGameId !== urlGameId) {
+            navigate(`/puzzle/cultural/${resolvedGameId}`, { replace: true });
+          }
 
           // Recreate the puzzle pieces with the loaded image and difficulty
           await createPuzzlePieces(savedImage, puzzleData.selectedDifficulty);
