@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { database, ref, set, update, onValue, remove, get } from '../firebase';
-import { Camera, Copy, Users, ArrowLeft, Play, Mail, Share2, LayoutTemplate, Square, Maximize, Minimize, Gamepad2, Box } from 'lucide-react';
+import { Share2, Copy, Users, ArrowLeft, Play, Mail, LayoutTemplate, Square, Maximize, Minimize, Gamepad2, Box } from 'lucide-react';
 import MultiplayerManager from './MultiplayerManager';
 import { toast } from 'react-hot-toast';
 import ErrorBoundary from './ErrorBoundary';
@@ -298,15 +298,53 @@ const CollaborativePuzzle = () => {
     }
   };
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(inviteLink);
-    toast.success('Invite link copied!');
+  const getInviteText = () => {
+    const playerName = userData?.displayName || userData?.email || 'A player';
+    const playersCount = Object.keys(players || {}).length;
+    return `Join my puzzle game! ${playerName} is waiting for ${playersCount} player(s). Come play together! ${inviteLink}`;
   };
 
-  const handleEmailShare = () => {
-    const subject = encodeURIComponent('Join my Puzzle Game!');
-    const body = encodeURIComponent(`Hey! Join my puzzle game: ${inviteLink}`);
-    window.open(`mailto:?subject=${subject}&body=${body}`);
+  const shareToSocial = async (platform) => {
+    const text = getInviteText();
+    const encodedText = encodeURIComponent(text);
+    const shareUrl = inviteLink;
+
+    if (platform === 'native' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my Puzzle Game!',
+          text,
+          url: shareUrl
+        });
+      } catch (shareError) {
+        if (shareError?.name !== 'AbortError') {
+          toast.error('Failed to open native share dialog');
+        }
+      }
+      return;
+    }
+
+    if (platform === 'copy') {
+      try {
+        await navigator.clipboard.writeText(`${text}`);
+        toast.success('Invite text copied!');
+      } catch (copyError) {
+        toast.error('Failed to copy invite text');
+      }
+      return;
+    }
+
+    const platformUrls = {
+      whatsapp: `https://wa.me/?text=${encodedText}`,
+      twitter: `https://twitter.com/intent/tweet?text=${encodedText}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodedText}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodedText}`
+    };
+
+    const targetUrl = platformUrls[platform];
+    if (!targetUrl) return;
+
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleWhatsAppShare = () => {
@@ -566,53 +604,45 @@ const CollaborativePuzzle = () => {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {navigator.share && (
+                      <button
+                        onClick={() => shareToSocial('native')}
+                        className="px-4 py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold hover:opacity-90 flex items-center justify-center gap-2"
+                      >
+                        <Share2 size={20} />
+                        Share
+                      </button>
+                    )}
                     <button
-                      onClick={handleEmailShare}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white rounded-lg transform hover:scale-105 transition-all"
+                      onClick={() => shareToSocial('whatsapp')}
+                      className="px-4 py-3 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-500"
                     >
-                      <Mail size={20} />
-                      <span>Email</span>
+                      WhatsApp
                     </button>
-
                     <button
-                      onClick={handleWhatsAppShare}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white rounded-lg transform hover:scale-105 transition-all"
+                      onClick={() => shareToSocial('twitter')}
+                      className="px-4 py-3 rounded-lg bg-sky-500 text-white font-semibold hover:bg-sky-400"
                     >
-                      <Share2 size={20} />
-                      <span>WhatsApp</span>
+                      X / Twitter
                     </button>
-
                     <button
-                      onClick={handleFacebookShare}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-lg transform hover:scale-105 transition-all"
+                      onClick={() => shareToSocial('facebook')}
+                      className="px-4 py-3 rounded-lg bg-blue-700 text-white font-semibold hover:bg-blue-600"
                     >
-                      <Share2 size={20} />
-                      <span>Facebook</span>
+                      Facebook
                     </button>
-
                     <button
-                      onClick={handleTwitterShare}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-300 hover:to-blue-400 text-white rounded-lg transform hover:scale-105 transition-all"
+                      onClick={() => shareToSocial('linkedin')}
+                      className="px-4 py-3 rounded-lg bg-blue-800 text-white font-semibold hover:bg-blue-700"
                     >
-                      <Share2 size={20} />
-                      <span>Twitter</span>
+                      LinkedIn
                     </button>
-
                     <button
-                      onClick={handleLinkedInShare}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-700 to-blue-800 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg transform hover:scale-105 transition-all"
+                      onClick={() => shareToSocial('copy')}
+                      className="px-4 py-3 rounded-lg bg-gray-700 text-white font-semibold hover:bg-gray-600"
                     >
-                      <Share2 size={20} />
-                      <span>LinkedIn</span>
-                    </button>
-
-                    <button
-                      onClick={handleInstagramShare}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-700 to-blue-800 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg transform hover:scale-105 transition-all"
-                    >
-                      <Share2 size={20} />
-                      <span>Instagram</span>
+                      Copy Text
                     </button>
                   </div>
                 </div>
