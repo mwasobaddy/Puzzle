@@ -9,7 +9,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import {
   Camera, Check, Info, Clock, ZoomIn, ZoomOut, Maximize2, RotateCcw, Image, Play,
-  Pause, Trophy, Users, Mouse, ZapIcon, Share2, X, Settings
+  Pause, Trophy, Users, Mouse, ZapIcon, Share2, X, Settings, Instagram
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { resolvePuzzleImageUrl } from '../utils/resolvePuzzleImageUrl';
@@ -1019,7 +1019,8 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       whatsapp: `https://wa.me/?text=${encodedText}`,
       twitter: `https://x.com/intent/tweet?text=${encodedText}`,
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodedText}`,
-      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodedText}`
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodedText}`,
+      instagram: `https://www.instagram.com/`
     };
 
     const targetUrl = platformUrls[platform];
@@ -1852,10 +1853,10 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
                   LinkedIn
                 </button>
                 <button
-                  onClick={() => shareToSocial('copy')}
-                  className="px-4 py-3 rounded-lg bg-gray-700 text-white font-semibold hover:bg-gray-600"
+                  onClick={() => shareToSocial('instagram')}
+                  className="px-4 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:from-purple-500 hover:to-pink-500"
                 >
-                  Copy Text
+                  Instagram
                 </button>
               </div>
 
