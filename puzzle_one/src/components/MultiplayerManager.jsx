@@ -1436,10 +1436,16 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
         }
       }
 
-      handlePieceSnap(piece, particleSystemRef.current);
-      piece.userData.isPlaced = true;
+       handlePieceSnap(piece, particleSystemRef.current);
+       piece.userData.isPlaced = true;
 
-      setPlacedPieces(prev => {
+       setGameStats(prev => ({
+         ...prev,
+         accurateDrops: prev.accurateDrops + 1,
+         points: prev.points + POINTS.ACCURATE_PLACEMENT
+       }));
+
+       setPlacedPieces(prev => {
         const nextPlaced = new Set(prev);
         nextPlaced.add(pieceId);
 
