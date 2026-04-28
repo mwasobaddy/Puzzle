@@ -157,7 +157,7 @@ const GRID_STYLE = {
   glowStrength: 0.5
 };
 
-const ASYNC_SOLO_MODE = true;
+const ASYNC_SOLO_MODE = false;
 
 const puzzlePieceShader = {
   vertexShader: `
