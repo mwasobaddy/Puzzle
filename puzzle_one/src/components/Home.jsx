@@ -201,11 +201,12 @@ const useUserSubscription = (userId) => {
 
 
 const formatTime = (time) => {
-  if (!time) return '--:--';
-  const minutes = Math.floor(time / 60);
-  const seconds = Math.floor(time % 60);
-  const milliseconds = String(time.toFixed(3).split('.')[1] || '000').slice(0, 2);
-  return `${minutes}:${String(seconds).padStart(2, '0')}.${milliseconds}`;
+  if (!time && time !== 0) return '--:--';
+  const totalSeconds = Math.round(Number(time) * 100) / 100;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  const ms = Math.floor((totalSeconds % 1) * 100);
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
 };
 
 const Home = ({ user }) => {
