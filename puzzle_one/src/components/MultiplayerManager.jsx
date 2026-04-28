@@ -639,6 +639,10 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
 
   const resetGame = () => {
+    if (!isHost) {
+      toast.error('Only the host can reset the puzzle');
+      return;
+    }
     clearInterval(timerRef.current);
     setIsSessionPlaying(false);
     setElapsedTime(0);
@@ -1338,6 +1342,10 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
   };
 
   const handleDifficultyChange = (newDifficulty) => {
+    if (!isHost) {
+      toast.error('Only the host can change difficulty');
+      return;
+    }
     updateDifficulty(newDifficulty);
     resetGame();
   };
