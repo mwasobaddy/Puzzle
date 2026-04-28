@@ -1016,8 +1016,8 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     }
 
     const platformUrls = {
-      whatsapp: `https://wa.me/?text=${encodedText}%20${encodeURIComponent(shareUrl)}`,
-      twitter: `https://twitter.com/intent/tweet?text=${encodedText}`,
+      whatsapp: `https://wa.me/?text=${encodedText}`,
+      twitter: `https://x.com/intent/tweet?text=${encodedText}`,
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodedText}`,
       linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodedText}`
     };
@@ -1025,7 +1025,15 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     const targetUrl = platformUrls[platform];
     if (!targetUrl) return;
 
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    const newWindow = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+
+    if (!newWindow) {
+      navigator.clipboard.writeText(`${text} ${shareUrl}`).then(() => {
+        toast.success('Link copied! Paste it into your social media.');
+      }).catch(() => {
+        toast.error('Popup blocked. Please allow popups or copy the link manually.');
+      });
+    }
   };
 
   const handlePuzzleTypeChange = (newType) => {
