@@ -913,7 +913,9 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     const endTime = Date.now();
     const completionTime = endTime - gameStats.startTime;
     const completionTimeSeconds = Number((completionTime / 1000).toFixed(2));
-    const accuracy = (gameStats.accurateDrops / gameStats.moveCount) * 100;
+    const accuracy = gameStats.moveCount > 0
+      ? (gameStats.accurateDrops / gameStats.moveCount) * 100
+      : 0;
 
     const timeBonus = Math.max(0, 1000 - Math.floor(completionTime / 1000)) * 2;
     const accuracyBonus = Math.floor(accuracy) * 10;
