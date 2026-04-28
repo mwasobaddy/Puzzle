@@ -320,11 +320,17 @@ export const useMultiplayerGame = (gameId, isHost = false) => {
     if (!gameId || !score) return;
 
     try {
-      const leaderboardRef = ref(database, `games/${gameId}/leaderboard/${score.userId}`);
-      await set(leaderboardRef, {
+      const sanitizedScore = {
         ...score,
+        accuracy: isNaN(score.accuracy) ? 0 : score.accuracy,
+        points: isNaN(score.points) ? 0 : score.points,
+        moveCount: score.moveCount || 0,
+        accurateDrops: score.accurateDrops || 0,
         timestamp: Date.now()
-      });
+      };
+
+      const leaderboardRef = ref(database, `games/${gameId}/leaderboard/${score.userId}`);
+      await set(leaderboardRef, sanitizedScore);
       console.log('✅ Leaderboard entry added:', score.userName);
     } catch (error) {
       console.error('Failed to add leaderboard entry:', error);
