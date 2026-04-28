@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { database, ref, set, update, onValue, remove, get } from '../firebase';
-import { Share2, Copy, Users, ArrowLeft, Play, Mail, LayoutTemplate, Square, Maximize, Minimize, Gamepad2, Box } from 'lucide-react';
+import { Camera, Share2, Copy, Users, ArrowLeft, Play, Mail, LayoutTemplate, Square, Maximize, Minimize, Gamepad2, Box } from 'lucide-react';
 import MultiplayerManager from './MultiplayerManager';
 import { toast } from 'react-hot-toast';
 import ErrorBoundary from './ErrorBoundary';
