@@ -336,7 +336,7 @@ const CollaborativePuzzle = () => {
 
     const platformUrls = {
       whatsapp: `https://wa.me/?text=${encodedText}`,
-      twitter: `https://twitter.com/intent/tweet?text=${encodedText}`,
+      twitter: `https://x.com/intent/tweet?text=${encodedText}`,
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodedText}`,
       linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodedText}`
     };
@@ -344,7 +344,14 @@ const CollaborativePuzzle = () => {
     const targetUrl = platformUrls[platform];
     if (!targetUrl) return;
 
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    const link = document.createElement('a');
+    link.href = targetUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleWhatsAppShare = () => {
@@ -637,12 +644,6 @@ const CollaborativePuzzle = () => {
                       className="px-4 py-3 rounded-lg bg-blue-800 text-white font-semibold hover:bg-blue-700"
                     >
                       LinkedIn
-                    </button>
-                    <button
-                      onClick={() => shareToSocial('copy')}
-                      className="px-4 py-3 rounded-lg bg-gray-700 text-white font-semibold hover:bg-gray-600"
-                    >
-                      Copy Text
                     </button>
                   </div>
                 </div>
