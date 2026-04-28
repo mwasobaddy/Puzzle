@@ -914,6 +914,9 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
 
 
   const handleGameCompletion = async () => {
+    clearInterval(timerRef.current);
+    setIsSessionPlaying(false);
+
     const endTime = Date.now();
     const completionTime = endTime - gameStats.startTime;
     const completionTimeSeconds = Number((completionTime / 1000).toFixed(2));
@@ -1409,6 +1412,13 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
       updateProgress(progress);
     }
   }, [progress, totalPieces]);
+
+  useEffect(() => {
+    if (gameState?.status === 'completed' && isSessionPlaying) {
+      clearInterval(timerRef.current);
+      setIsSessionPlaying(false);
+    }
+  }, [gameState?.status, isSessionPlaying]);
 
   useEffect(() => {
     if (ASYNC_SOLO_MODE && progress === 100 && !hasShownSharePopupRef.current) {
