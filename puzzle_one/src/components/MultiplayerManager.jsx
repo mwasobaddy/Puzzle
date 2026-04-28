@@ -1025,15 +1025,14 @@ const MultiplayerManager = ({ gameId, isHost, user, image, puzzleType }) => {
     const targetUrl = platformUrls[platform];
     if (!targetUrl) return;
 
-    const newWindow = window.open(targetUrl, '_blank', 'noopener,noreferrer');
-
-    if (!newWindow) {
-      navigator.clipboard.writeText(`${text} ${shareUrl}`).then(() => {
-        toast.success('Link copied! Paste it into your social media.');
-      }).catch(() => {
-        toast.error('Popup blocked. Please allow popups or copy the link manually.');
-      });
-    }
+    const link = document.createElement('a');
+    link.href = targetUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handlePuzzleTypeChange = (newType) => {
